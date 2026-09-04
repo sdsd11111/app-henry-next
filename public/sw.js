@@ -1,10 +1,11 @@
 // Simple service worker for PWA offline shell & caching
-const CACHE_NAME = 'henry-castillo-pwa-v1';
+const CACHE_NAME = 'henry-castillo-pwa-v2';
 const PRECACHE_URLS = [
   '/',
   '/cliente',
   '/coach',
   '/manifest.json',
+  '/Logo-pwa.png',
   '/logo.png',
   '/icon-192.png',
   '/icon-512.png',

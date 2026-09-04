@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+:root {
+  --hc-primary: #00fff6; /* Electric Cyan */
+  --hc-primary-foreground: #09090b; /* Texto Negro Profundo */
+  --hc-background: #F4F8FB; /* Fondo claro de la web original */
+  --hc-card: #ffffff; /* Tarjetas y contenedores blancos puros */
+  --hc-border: #e4e4e7; /* Gris muy suave para bordes */
+  --hc-foreground: #171717; /* Texto principal oscuro */
+  --hc-muted-foreground: #52525b; /* Textos secundarios */
+  --aion-accent: #004b73;
+}
+
+html, body {
+  min-height: 100%;
+  color: var(--hc-foreground);
+  background-color: var(--hc-background);
+  font-family: 'Poppins', 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Tipografías auténticas del sistema original */
+.font-sora-light { font-family: 'Sora', sans-serif; font-weight: 300; }
+.font-sora-medium { font-family: 'Sora', sans-serif; font-weight: 500; }
+.font-sora-bold { font-family: 'Sora', sans-serif; font-weight: 700; }
+
+.font-poppins-regular { font-family: 'Poppins', sans-serif; font-weight: 400; }
+.font-poppins-italic { font-family: 'Poppins', sans-serif; font-style: italic; font-weight: 400; }
+.font-poppins-semibold { font-family: 'Poppins', sans-serif; font-weight: 600; }
+
+/* Brand headers Michroma */
+.font-brand { font-family: 'Michroma', sans-serif; }
+
+/* Never allow white text on light cards */
+.bg-white *, .bg-blue-50 *, .bg-slate-50 *, .bg-slate-100 *, .bg-amber-50 *, .bg-rose-50 * {
+  color: #1A3644;
+}
+
+/* Cyan button and accents */
+.bg-\[\#004b73\], .bg-aion-accent, .bg-aion-accentDark {
+  background-color: var(--hc-primary) !important;
+  color: var(--hc-primary-foreground) !important;
+  border-color: var(--hc-primary) !important;
+  font-weight: 700 !important;
+}
+
+/* Force dark text on cyan elements */
+.bg-\[\#004b73\] *, .bg-aion-accent *, .bg-aion-accentDark *, .from-\[\#004b73\] *, .to-\[\#003857\] * {
+  color: var(--hc-primary-foreground) !important;
+}
+button.bg-\[\#004b73\], a.bg-\[\#004b73\], button[class*="bg-[#004b73]"] {
+  color: var(--hc-primary-foreground) !important;
+}
+
+.text-\[\#004b73\], .text-\[\#003857\], .text-aion-accent, .text-aion-accentDark {
+  color: var(--hc-foreground) !important;
+}
+
+/* Smooth button transitions */
+button, a[class*="bg-"], .btn, [role="button"] {
+  transition: all 0.2s ease-in-out !important;
+}
+
+button:hover, a[class*="bg-"]:hover, .btn:hover {
+  transform: translateY(-1px);
+}
+
+button:active, a[class*="bg-"]:active, .btn:active {
+  transform: translateY(1px) scale(0.98) !important;
+}
+
+/* Input and Select styling */
+input, select, textarea {
+  color: #1A3644 !important;
+  background-color: #F0F6F9 !important;
+  border-color: #E2E8F0 !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  border-color: #004b73 !important;
+  box-shadow: 0 0 0 3px rgba(0, 75, 115, 0.15) !important;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+/* Scrollbar macOS style */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Clinical layout flat borders */
+* {
+  border-radius: 0 !important;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+  }
+
+  main {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 2rem !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+
+  table {
+    min-width: 850px !important;
+    table-layout: auto !important;
+  }
+
+  th, td {
+    white-space: nowrap !important;
+    padding: 0.5rem !important;
+    font-size: 11px !important;
+  }
+}

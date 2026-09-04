@@ -14,7 +14,7 @@ interface VipClientViewProps {
   onAddSet: (exIndex: number) => void;
   onUpdateWellness: (field: string, value: any) => void;
   onToggleMenstrualCycle: () => void;
-  onSaveSessionLog: (notes: string) => Promise<void>;
+  onSaveSessionLog: (notes: string, stagedOverload?: Record<number, number>) => Promise<void>;
   onDeleteLog: (logIndex: number) => Promise<void>;
   onOpenExerciseHistory: (exName: string) => void;
 }
@@ -206,27 +206,30 @@ export default function VipClientView({
     }
   };
 
+  // Overloads programados para la próxima sesión: { [exIndex]: nuevoPeso }
+  const [stagedOverloads, setStagedOverloads] = useState<Record<number, number>>({});
+
   const handleApplyOverload = () => {
     if (!pendingOverload) return;
-    const { exIndex, suggestedWeight } = pendingOverload;
+    const { exIndex, suggestedWeight, exerciseName } = pendingOverload;
     const ex = routine.exercises?.[exIndex];
-    if (ex && ex.sets) {
-      ex.sets.forEach((_, sIdx) => {
-        onUpdateSet(exIndex, sIdx, 'weight', suggestedWeight);
-      });
+    if (ex) {
       ex.progressionPrompted = true;
     }
+    // Guardamos la carga sugerida para aplicarla a la siguiente sesión al guardar
+    setStagedOverloads((prev) => ({ ...prev, [exIndex]: suggestedWeight }));
     setPendingOverload(null);
     alert(
-      `🚀 ¡Excelente! Hemos actualizado la carga de "${pendingOverload.exerciseName}" a ${suggestedWeight} kg en todas tus series para tu próximo entrenamiento.`
+      `🚀 ¡Anotado! Tu entrenamiento de hoy se registrará con la carga lograda (${pendingOverload.currentWeight} kg). Al guardar la sesión, "${exerciseName}" se actualizará automáticamente a ${suggestedWeight} kg para tu próxima rutina.`
     );
   };
 
   const handleSaveRoutine = async () => {
     setIsSaving(true);
-    await onSaveSessionLog(sessionNotes);
+    await onSaveSessionLog(sessionNotes, stagedOverloads);
     setIsSaving(false);
     setSessionNotes('');
+    setStagedOverloads({});
   };
 
   const handleSendWhatsApp = () => {

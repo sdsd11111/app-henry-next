@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { VipClient, DayRoutine } from '@/lib/types';
-import { PATRONES_PRINCIPALES, PATRONES_ACCESORIOS } from '@/lib/catalog';
+import { PATRONES_PRINCIPALES, PATRONES_ACCESORIOS, DEFAULT_CATALOG_GROUPS } from '@/lib/catalog';
 
 interface VipAdminViewProps {
   vipClients: VipClient[];
@@ -474,20 +474,46 @@ export default function VipAdminView({
                           </td>
                           <td className="p-2">
                             <div className="flex flex-col gap-1.5">
-                              <input
-                                type="text"
-                                list="catalogSuggestions"
-                                value={
-                                  ex.name
-                                    ? ex.name.charAt(0).toUpperCase() +
-                                      ex.name.slice(1).toLowerCase()
-                                    : ''
-                                }
-                                onChange={(e) =>
-                                  onUpdateExerciseField(exIdx, 'name', e.target.value)
-                                }
-                                className="w-full text-left font-sora-bold normal-case bg-white border border-slate-300 py-1.5 px-2 text-xs text-[#004b73] focus:border-[#004b73] focus:outline-none shadow-xs truncate"
-                              />
+                              <div className="relative flex items-center">
+                                <input
+                                  type="text"
+                                  list="catalogSuggestions"
+                                  value={
+                                    ex.name
+                                      ? ex.name.charAt(0).toUpperCase() +
+                                        ex.name.slice(1).toLowerCase()
+                                      : ''
+                                  }
+                                  onChange={(e) =>
+                                    onUpdateExerciseField(exIdx, 'name', e.target.value)
+                                  }
+                                  placeholder="Escribe o elige..."
+                                  className="w-full text-left font-sora-bold normal-case bg-white border border-slate-300 py-1.5 pl-2 pr-7 text-xs text-[#004b73] focus:border-[#004b73] focus:outline-none shadow-xs truncate"
+                                />
+                                <select
+                                  value=""
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      onUpdateExerciseField(exIdx, 'name', e.target.value);
+                                    }
+                                  }}
+                                  title="Ver y elegir de todos los ejercicios"
+                                  className="absolute right-0 top-0 bottom-0 w-6 opacity-80 hover:opacity-100 bg-transparent cursor-pointer text-slate-500 focus:outline-none text-xs"
+                                >
+                                  <option value="" disabled>
+                                    ▼ Desplegar lista completa
+                                  </option>
+                                  {DEFAULT_CATALOG_GROUPS.map((grp) => (
+                                    <optgroup key={grp.group} label={grp.group}>
+                                      {grp.exercises.map((item) => (
+                                        <option key={item} value={item}>
+                                          {item}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  ))}
+                                </select>
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => onOpenExerciseHistory(ex.name)}

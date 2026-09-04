@@ -628,7 +628,7 @@ export default function Home() {
     setLoggedVipClient(prev => prev ? { ...prev, activeDay: day } : prev);
   }, []);
 
-  const handleVipSaveSessionLog = useCallback(async (notes: string) => {
+  const handleVipSaveSessionLog = useCallback(async (notes: string, stagedOverload?: Record<number, number>) => {
     if (!loggedVipClient) return;
     const day = loggedVipClient.activeDay || loggedVipClient.assignedDays?.[0] || 'Lunes';
     const routine = loggedVipClient.routines?.[day] ?? emptyRoutine();
@@ -647,6 +647,21 @@ export default function Home() {
         nutrition: wellness?.nutrition || undefined,
       },
     };
+
+    const nextExercises = (routine.exercises || []).map((ex, exIdx) => {
+      const nextWeight = stagedOverload && stagedOverload[exIdx] !== undefined ? stagedOverload[exIdx] : null;
+      return {
+        ...ex,
+        progressionPrompted: false,
+        sets: (ex.sets || []).map((s) => ({
+          ...s,
+          weight: nextWeight !== null ? nextWeight : s.weight,
+          completed: false,
+        })),
+      };
+    });
+    const routineForNextSession = { ...routine, exercises: nextExercises };
+
     try {
       await fetch('/api/sync', {
         method: 'POST',
@@ -655,21 +670,14 @@ export default function Home() {
           action: 'save_log',
           clientId: loggedVipClient.id,
           log,
-          routine,
+          routine: routineForNextSession,
           day,
         }),
       });
 
-      const updatedExercises = (routine.exercises || []).map((ex) => ({
-        ...ex,
-        progressionPrompted: false,
-        sets: (ex.sets || []).map((s) => ({ ...s, completed: false })),
-      }));
-      const updatedRoutine = { ...routine, exercises: updatedExercises };
-
       setLoggedVipClient(prev => prev ? {
         ...prev,
-        routines: { ...prev.routines, [day]: updatedRoutine },
+        routines: { ...prev.routines, [day]: routineForNextSession },
         logs: [...(prev.logs || []), log]
       } : prev);
     } catch (err) {

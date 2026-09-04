@@ -220,7 +220,7 @@ function ClientePortalContent() {
   }, [client, syncRoutineToDb]);
 
   const handleSaveSessionLog = useCallback(
-    async (notes: string) => {
+    async (notes: string, stagedOverload?: Record<number, number>) => {
       if (!client) return;
       const day = client.activeDay || client.assignedDays?.[0] || 'Lunes';
       const routine = client.routines?.[day] ?? emptyRoutine();
@@ -233,6 +233,7 @@ function ClientePortalContent() {
       );
       const totalSets = exercises.reduce((acc, ex) => acc + (ex.sets ? ex.sets.length : 0), 0);
 
+      // Log records the actual weights lifted during this session
       const log: WorkoutLog = {
         id: 'log_' + Date.now(),
         date: new Date().toISOString().split('T')[0],
@@ -251,6 +252,21 @@ function ClientePortalContent() {
         })),
       };
 
+      // Future routine: reset completed flags to false, and apply suggested overload weight to next session
+      const nextExercises = exercises.map((ex, exIdx) => {
+        const nextWeight = stagedOverload && stagedOverload[exIdx] !== undefined ? stagedOverload[exIdx] : null;
+        return {
+          ...ex,
+          progressionPrompted: false,
+          sets: (ex.sets || []).map((s) => ({
+            ...s,
+            weight: nextWeight !== null ? nextWeight : s.weight,
+            completed: false,
+          })),
+        };
+      });
+      const routineForNextSession = { ...routine, exercises: nextExercises };
+
       try {
         await fetch('/api/sync', {
           method: 'POST',
@@ -259,24 +275,16 @@ function ClientePortalContent() {
             action: 'save_log',
             clientId: client.id,
             log,
-            routine,
+            routine: routineForNextSession,
             day,
           }),
         });
-
-        // Reset completed flags locally for next session and clear progression prompt
-        const updatedExercises = exercises.map((ex) => ({
-          ...ex,
-          progressionPrompted: false,
-          sets: (ex.sets || []).map((s) => ({ ...s, completed: false })),
-        }));
-        const updatedRoutine = { ...routine, exercises: updatedExercises };
 
         setClient((prev) =>
           prev
             ? {
                 ...prev,
-                routines: { ...prev.routines, [day]: updatedRoutine },
+                routines: { ...prev.routines, [day]: routineForNextSession },
                 logs: [...(prev.logs || []), log],
               }
             : prev

@@ -362,19 +362,32 @@ export default function Home() {
 
   const handleUpdateSessionName = useCallback((title: string) => {
     const day = getActiveDay();
-    updateSelectedVipLocally(c => ({
-      ...c,
-      routines: { ...c.routines, [day]: { ...(c.routines?.[day] ?? emptyRoutine()), sessionName: title } }
+    setVipClients(prev => prev.map(c => {
+      if (c.id !== selectedVipClientId) return c;
+      const updatedRoutine = { ...(c.routines?.[day] ?? emptyRoutine()), sessionName: title };
+      // Debounce sync while typing
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = setTimeout(() => {
+        fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'save_routine', clientId: c.id, day, routine: updatedRoutine }) });
+      }, 800);
+      return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
     }));
-  }, [getActiveDay, updateSelectedVipLocally]);
+  }, [getActiveDay, selectedVipClientId]);
 
   const handleUpdateNote = useCallback((note: string) => {
     const day = getActiveDay();
-    updateSelectedVipLocally(c => ({
-      ...c,
-      routines: { ...c.routines, [day]: { ...(c.routines?.[day] ?? emptyRoutine()), notes: note } }
+    setVipClients(prev => prev.map(c => {
+      if (c.id !== selectedVipClientId) return c;
+      const updatedRoutine = { ...(c.routines?.[day] ?? emptyRoutine()), notes: note };
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = setTimeout(() => {
+        fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'save_routine', clientId: c.id, day, routine: updatedRoutine }) });
+      }, 800);
+      return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
     }));
-  }, [getActiveDay, updateSelectedVipLocally]);
+  }, [getActiveDay, selectedVipClientId]);
 
   const handleToggleMenstrualCycle = useCallback((clientId: string) => {
     const day = getActiveDay();
@@ -402,20 +415,39 @@ export default function Home() {
     }));
   }, [getActiveDay]);
 
+  // Helper: persist coach routine change immediately to DB
+  const syncCoachRoutineToDb = useCallback(async (clientId: string, day: string, routine: DayRoutine) => {
+    try {
+      await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_routine', clientId, day, routine }),
+      });
+    } catch (e) {
+      console.error('Error syncing coach routine:', e);
+    }
+  }, []);
+
   const handleUpdateExerciseField = useCallback((exIndex: number, field: string, value: any) => {
     const day = getActiveDay();
-    updateSelectedVipLocally(c => {
+    setVipClients(prev => prev.map(c => {
+      if (c.id !== selectedVipClientId) return c;
       const routine = c.routines?.[day] ?? emptyRoutine();
       const exercises = [...(routine.exercises || [])];
       if (!exercises[exIndex]) return c;
       exercises[exIndex] = { ...exercises[exIndex], [field]: value };
-      return { ...c, routines: { ...c.routines, [day]: { ...routine, exercises } } };
-    });
-  }, [getActiveDay, updateSelectedVipLocally]);
+      const updatedRoutine = { ...routine, exercises };
+      // Debounce DB sync on field changes (typing)
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = setTimeout(() => syncCoachRoutineToDb(c.id, day, updatedRoutine), 800);
+      return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
+    }));
+  }, [getActiveDay, selectedVipClientId, syncCoachRoutineToDb]);
 
   const handleChangeExerciseSets = useCallback((exIndex: number, delta: number) => {
     const day = getActiveDay();
-    updateSelectedVipLocally(c => {
+    setVipClients(prev => prev.map(c => {
+      if (c.id !== selectedVipClientId) return c;
       const routine = c.routines?.[day] ?? emptyRoutine();
       const exercises = [...(routine.exercises || [])];
       if (!exercises[exIndex]) return c;
@@ -429,18 +461,23 @@ export default function Home() {
         newSets = currentSets.slice(0, Math.max(1, currentSets.length - 1));
       }
       exercises[exIndex] = { ...ex, sets: newSets };
-      return { ...c, routines: { ...c.routines, [day]: { ...routine, exercises } } };
-    });
-  }, [getActiveDay, updateSelectedVipLocally]);
+      const updatedRoutine = { ...routine, exercises };
+      syncCoachRoutineToDb(c.id, day, updatedRoutine);
+      return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
+    }));
+  }, [getActiveDay, selectedVipClientId, syncCoachRoutineToDb]);
 
   const handleRemoveExercise = useCallback((exIndex: number) => {
     const day = getActiveDay();
-    updateSelectedVipLocally(c => {
+    setVipClients(prev => prev.map(c => {
+      if (c.id !== selectedVipClientId) return c;
       const routine = c.routines?.[day] ?? emptyRoutine();
       const exercises = (routine.exercises || []).filter((_, i) => i !== exIndex);
-      return { ...c, routines: { ...c.routines, [day]: { ...routine, exercises } } };
-    });
-  }, [getActiveDay, updateSelectedVipLocally]);
+      const updatedRoutine = { ...routine, exercises };
+      syncCoachRoutineToDb(c.id, day, updatedRoutine);
+      return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
+    }));
+  }, [getActiveDay, selectedVipClientId, syncCoachRoutineToDb]);
 
   const handleAddBlankExercise = useCallback(() => {
     const day = getActiveDay();
@@ -455,11 +492,14 @@ export default function Home() {
       rpe: 7,
       sets: [{ setNumber: 1, weight: 0, reps: 10, completed: false }, { setNumber: 2, weight: 0, reps: 10, completed: false }, { setNumber: 3, weight: 0, reps: 10, completed: false }],
     };
-    updateSelectedVipLocally(c => {
+    setVipClients(prev => prev.map(c => {
+      if (c.id !== selectedVipClientId) return c;
       const routine = c.routines?.[day] ?? emptyRoutine();
-      return { ...c, routines: { ...c.routines, [day]: { ...routine, exercises: [...(routine.exercises || []), newEx] } } };
-    });
-  }, [getActiveDay, updateSelectedVipLocally]);
+      const updatedRoutine = { ...routine, exercises: [...(routine.exercises || []), newEx] };
+      syncCoachRoutineToDb(c.id, day, updatedRoutine);
+      return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
+    }));
+  }, [getActiveDay, selectedVipClientId, syncCoachRoutineToDb]);
 
   const handleAddCatalogExercise = useCallback((name: string) => {
     const day = getActiveDay();
@@ -474,11 +514,14 @@ export default function Home() {
       rpe: 7,
       sets: [{ setNumber: 1, weight: 0, reps: 10, completed: false }, { setNumber: 2, weight: 0, reps: 10, completed: false }, { setNumber: 3, weight: 0, reps: 10, completed: false }],
     };
-    updateSelectedVipLocally(c => {
+    setVipClients(prev => prev.map(c => {
+      if (c.id !== selectedVipClientId) return c;
       const routine = c.routines?.[day] ?? emptyRoutine();
-      return { ...c, routines: { ...c.routines, [day]: { ...routine, exercises: [...(routine.exercises || []), newEx] } } };
-    });
-  }, [getActiveDay, updateSelectedVipLocally]);
+      const updatedRoutine = { ...routine, exercises: [...(routine.exercises || []), newEx] };
+      syncCoachRoutineToDb(c.id, day, updatedRoutine);
+      return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
+    }));
+  }, [getActiveDay, selectedVipClientId, syncCoachRoutineToDb]);
 
   // ──────────────────────────────────────────
   // VIP CLIENT — set updates

@@ -197,7 +197,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Missing clientId or logId' }, { status: 400 });
       }
       try {
-        await conn.query('DELETE FROM workout_logs WHERE id = ? AND client_id = ?', [logId, clientId]);
+        await conn.query(
+          "DELETE FROM workout_logs WHERE client_id = ? AND (id = ? OR JSON_UNQUOTE(JSON_EXTRACT(log_data, '$.id')) = ?)",
+          [clientId, logId, logId]
+        );
         return NextResponse.json({ success: true });
       } finally {
         conn.release();

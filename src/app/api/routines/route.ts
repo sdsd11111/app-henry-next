@@ -19,7 +19,7 @@ export async function GET() {
       pool.query("SELECT * FROM routine_exercises ORDER BY order_index ASC"),
       pool.query("SELECT * FROM exercise_sets ORDER BY set_number ASC"),
       pool.query("SELECT * FROM cardio_activities"),
-      pool.query("SELECT client_id, log_data FROM workout_logs ORDER BY id DESC")
+      pool.query("SELECT id, client_id, log_data FROM workout_logs ORDER BY id DESC")
     ]);
 
     // 2. Build index maps in memory (instant lookup O(1))
@@ -100,7 +100,12 @@ export async function GET() {
       if (rl.log_data) {
         try {
           const parsed = typeof rl.log_data === 'string' ? JSON.parse(rl.log_data) : rl.log_data;
-          if (parsed) logsByClientId.get(cId)!.push(parsed);
+          if (parsed) {
+            // Keep DB id accessible for reliable deletion and tracking
+            if (!parsed.id) parsed.id = String(rl.id);
+            parsed.dbId = rl.id;
+            logsByClientId.get(cId)!.push(parsed);
+          }
         } catch {
           // Ignore invalid JSON
         }

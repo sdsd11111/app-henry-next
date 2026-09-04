@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import VipAdminView from '@/components/VipAdminView';
@@ -23,6 +23,25 @@ export default function CoachPage() {
   const [selectedVipClientId, setSelectedVipClientId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Helper: Persist routine changes directly to MySQL
+  const syncRoutineToDb = useCallback(async (clientId: string, day: string, routine: DayRoutine) => {
+    try {
+      await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_routine',
+          clientId,
+          day,
+          routine,
+        }),
+      });
+    } catch (e) {
+      console.error('Error sincronizando rutina a MySQL:', e);
+    }
+  }, []);
 
   // Modales
   const [modalAddVip, setModalAddVip] = useState(false);
@@ -114,7 +133,10 @@ export default function CoachPage() {
         if (c.id !== selectedVipClientId) return c;
         const day = c.activeDay || c.assignedDays?.[0] || 'Lunes';
         const routine = c.routines?.[day] ?? emptyRoutine();
-        return { ...c, routines: { ...c.routines, [day]: { ...routine, sessionName } } };
+        const updatedRoutine = { ...routine, sessionName };
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = setTimeout(() => syncRoutineToDb(c.id, day, updatedRoutine), 600);
+        return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
       })
     );
   };
@@ -126,7 +148,10 @@ export default function CoachPage() {
         if (c.id !== selectedVipClientId) return c;
         const day = c.activeDay || c.assignedDays?.[0] || 'Lunes';
         const routine = c.routines?.[day] ?? emptyRoutine();
-        return { ...c, routines: { ...c.routines, [day]: { ...routine, notes } } };
+        const updatedRoutine = { ...routine, notes };
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = setTimeout(() => syncRoutineToDb(c.id, day, updatedRoutine), 600);
+        return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
       })
     );
   };
@@ -138,19 +163,7 @@ export default function CoachPage() {
         const day = c.activeDay || c.assignedDays?.[0] || 'Lunes';
         const routine = c.routines?.[day] ?? emptyRoutine();
         const updatedRoutine = { ...routine, isMenstrualCycle: !routine.isMenstrualCycle };
-
-        // Sincronizar inmediatamente a MySQL
-        fetch('/api/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'save_routine',
-            clientId,
-            routine: updatedRoutine,
-            day,
-          }),
-        }).catch((e) => console.error('Error syncing menstrual cycle:', e));
-
+        syncRoutineToDb(clientId, day, updatedRoutine);
         return {
           ...c,
           routines: {
@@ -172,7 +185,10 @@ export default function CoachPage() {
         const exercises = [...(routine.exercises || [])];
         if (!exercises[exIndex]) return c;
         exercises[exIndex] = { ...exercises[exIndex], [field]: value };
-        return { ...c, routines: { ...c.routines, [day]: { ...routine, exercises } } };
+        const updatedRoutine = { ...routine, exercises };
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = setTimeout(() => syncRoutineToDb(c.id, day, updatedRoutine), 600);
+        return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
       })
     );
   };
@@ -200,7 +216,9 @@ export default function CoachPage() {
           sets.pop();
         }
         exercises[exIndex] = { ...exercises[exIndex], sets, setsTarget: String(sets.length) };
-        return { ...c, routines: { ...c.routines, [day]: { ...routine, exercises } } };
+        const updatedRoutine = { ...routine, exercises };
+        syncRoutineToDb(c.id, day, updatedRoutine);
+        return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
       })
     );
   };
@@ -213,7 +231,9 @@ export default function CoachPage() {
         const day = c.activeDay || c.assignedDays?.[0] || 'Lunes';
         const routine = c.routines?.[day] ?? emptyRoutine();
         const exercises = (routine.exercises || []).filter((_, i) => i !== exIndex);
-        return { ...c, routines: { ...c.routines, [day]: { ...routine, exercises } } };
+        const updatedRoutine = { ...routine, exercises };
+        syncRoutineToDb(c.id, day, updatedRoutine);
+        return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
       })
     );
   };
@@ -243,9 +263,11 @@ export default function CoachPage() {
             { id: 'vs_3', setNumber: 3, weight: 0, reps: 0, completed: false },
           ],
         };
+        const updatedRoutine = { ...routine, exercises: [...(routine.exercises || []), newEx] };
+        syncRoutineToDb(c.id, day, updatedRoutine);
         return {
           ...c,
-          routines: { ...c.routines, [day]: { ...routine, exercises: [...(routine.exercises || []), newEx] } },
+          routines: { ...c.routines, [day]: updatedRoutine },
         };
       })
     );
@@ -276,9 +298,11 @@ export default function CoachPage() {
             { id: 'vs_3', setNumber: 3, weight: 0, reps: 0, completed: false },
           ],
         };
+        const updatedRoutine = { ...routine, exercises: [...(routine.exercises || []), newEx] };
+        syncRoutineToDb(c.id, day, updatedRoutine);
         return {
           ...c,
-          routines: { ...c.routines, [day]: { ...routine, exercises: [...(routine.exercises || []), newEx] } },
+          routines: { ...c.routines, [day]: updatedRoutine },
         };
       })
     );

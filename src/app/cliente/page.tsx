@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import VipClientView from '@/components/VipClientView';
@@ -19,6 +19,7 @@ function ClientePortalContent() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [modalHistory, setModalHistory] = useState<boolean>(false);
   const [historyExercise, setHistoryExercise] = useState<string>('');
+  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Restaurar sesión guardada o autologin si viene ?user=
   useEffect(() => {
@@ -58,26 +59,29 @@ function ClientePortalContent() {
     restoreSession();
   }, [searchParams]);
 
-  const handleLogin = useCallback(async (username: string, password: string) => {
-    try {
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'vip_login', username, password }),
-      });
-      const data = await res.json();
-      if (data.success && data.client) {
-        setClient(data.client);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('hc_vip_client_id', data.client.id);
+  const handleLogin = useCallback(
+    async (username: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const res = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'vip_login', username, password: pass }),
+        });
+        const data = await res.json();
+        if (data.success && data.client) {
+          setClient(data.client);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('hc_vip_client_id', data.client.id);
+          }
+          return { success: true };
         }
-        return { success: true };
+        return { success: false, error: data.error || 'Credenciales inválidas' };
+      } catch {
+        return { success: false, error: 'Error de conexión con el servidor' };
       }
-      return { success: false, error: data.error || 'Credenciales inválidas' };
-    } catch {
-      return { success: false, error: 'Error de conexión con el servidor' };
-    }
-  }, []);
+    },
+    []
+  );
 
   const handleLogout = useCallback(() => {
     setClient(null);
@@ -121,7 +125,8 @@ function ClientePortalContent() {
         sets[setIndex] = { ...sets[setIndex], [field]: value };
         exercises[exIndex] = { ...exercises[exIndex], sets };
         const updatedRoutine = { ...routine, exercises };
-        syncRoutineToDb(prev.id, day, updatedRoutine);
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = setTimeout(() => syncRoutineToDb(prev.id, day, updatedRoutine), 600);
         return { ...prev, routines: { ...prev.routines, [day]: updatedRoutine } };
       });
     },
@@ -188,7 +193,8 @@ function ClientePortalContent() {
           [field]: value,
         };
         const updatedRoutine = { ...routine, wellness };
-        syncRoutineToDb(prev.id, day, updatedRoutine);
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = setTimeout(() => syncRoutineToDb(prev.id, day, updatedRoutine), 600);
         return { ...prev, routines: { ...prev.routines, [day]: updatedRoutine } };
       });
     },

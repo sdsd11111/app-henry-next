@@ -637,8 +637,8 @@ export default function VipAdminView({
                 <button
                   type="button"
                   onClick={handleAddCatalogSubmit}
-                  className="px-5 py-3 shrink-0 font-sora-bold text-xs bg-[#004b73] hover:bg-[#003857] text-black shadow-sm transition whitespace-nowrap flex items-center justify-center cursor-pointer"
-                  style={{ color: '#000000' }}
+                  className="px-5 py-3 shrink-0 font-sora-bold text-xs bg-[#004b73] hover:bg-[#003857] text-white shadow-sm transition whitespace-nowrap flex items-center justify-center cursor-pointer"
+                  style={{ color: '#FFFFFF' }}
                 >
                   + Añadir al Plan
                 </button>

@@ -9,7 +9,7 @@ interface VipClientViewProps {
   onLogin: (username: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   onLogout: () => void;
   onSelectDay: (day: string) => void;
-  onUpdateSet: (exIndex: number, setIndex: number, field: 'weight' | 'reps', value: number) => void;
+  onUpdateSet: (exIndex: number, setIndex: number, field: 'weight' | 'reps', value: number | string) => void;
   onToggleSetCompleted: (exIndex: number, setIndex: number) => void;
   onAddSet: (exIndex: number) => void;
   onUpdateWellness: (field: string, value: any) => void;
@@ -641,17 +641,22 @@ export default function VipClientView({
                               </span>
                               <div className="flex items-center gap-1">
                                 <input
-                                  type="number"
-                                  step="0.1"
-                                  value={set.weight !== undefined ? set.weight : 0}
-                                  onChange={(e) =>
-                                    onUpdateSet(
-                                      exIndex,
-                                      setIndex,
-                                      'weight',
-                                      parseFloat(e.target.value) || 0
-                                    )
-                                  }
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={set.weight !== undefined && set.weight !== null ? set.weight : ''}
+                                  onFocus={(e) => {
+                                    if (e.target.value === '0') e.target.select();
+                                  }}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                      onUpdateSet(exIndex, setIndex, 'weight', val);
+                                    }
+                                  }}
+                                  onBlur={(e) => {
+                                    const num = parseFloat(e.target.value);
+                                    onUpdateSet(exIndex, setIndex, 'weight', isNaN(num) ? 0 : num);
+                                  }}
                                   className="w-14 bg-white border border-slate-300 px-1.5 py-0.5 text-xs font-sora-bold text-center text-[#1A3644] focus:border-[#004b73] focus:outline-none shadow-sm"
                                   title="Carga (Kg)"
                                 />
@@ -660,16 +665,22 @@ export default function VipClientView({
                               <span className="text-slate-300">×</span>
                               <div className="flex items-center gap-1">
                                 <input
-                                  type="number"
-                                  value={set.reps || 0}
-                                  onChange={(e) =>
-                                    onUpdateSet(
-                                      exIndex,
-                                      setIndex,
-                                      'reps',
-                                      parseInt(e.target.value, 10) || 0
-                                    )
-                                  }
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={set.reps !== undefined && set.reps !== null ? set.reps : ''}
+                                  onFocus={(e) => {
+                                    if (e.target.value === '0') e.target.select();
+                                  }}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^\d*$/.test(val)) {
+                                      onUpdateSet(exIndex, setIndex, 'reps', val);
+                                    }
+                                  }}
+                                  onBlur={(e) => {
+                                    const num = parseInt(e.target.value, 10);
+                                    onUpdateSet(exIndex, setIndex, 'reps', isNaN(num) ? 0 : num);
+                                  }}
                                   className="w-12 bg-white border border-slate-300 px-1.5 py-0.5 text-xs font-sora-bold text-center text-[#1A3644] focus:border-[#004b73] focus:outline-none shadow-sm"
                                   title="Reps logradas"
                                 />

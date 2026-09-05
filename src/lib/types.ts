@@ -7,8 +7,8 @@ export interface Coach {
 export interface ExerciseSet {
   id?: string;
   setNumber: number;
-  weight: number;
-  reps: number;
+  weight: number | string;
+  reps: number | string;
   completed?: boolean;
 }
 

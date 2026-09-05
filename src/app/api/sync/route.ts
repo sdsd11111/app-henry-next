@@ -7,138 +7,146 @@ export async function POST(request: Request) {
   try {
     const data = await request.json();
 
-    // Helper to persist single day routine to MySQL
+    // Helper to persist single day routine to MySQL with atomic transaction
     const persistSingleRoutine = async (clientId: string, day: string, routineData: any, resetSetsCompleted = false) => {
       const vitals = routineData.vitals || {};
       const wellness = routineData.wellness || {};
 
-      const [existRoutine]: any = await conn.query(
-        'SELECT id FROM day_routines WHERE client_id = ? AND day_of_week = ?',
-        [clientId, day]
-      );
-
-      let dbRoutineId: number;
-      if (existRoutine && existRoutine.length > 0) {
-        dbRoutineId = existRoutine[0].id;
-        await conn.query(
-          `UPDATE day_routines SET session_name=?, notes=?, is_menstrual_cycle=?, systolic=?, diastolic=?, heart_rate=?, mood=?, sleep=?, nutrition=?, weight=? WHERE id=?`,
-          [
-            routineData.sessionName || '',
-            routineData.notes || '',
-            routineData.isMenstrualCycle ? 1 : 0,
-            vitals.systolic || 0,
-            vitals.diastolic || 0,
-            vitals.heartRate || 0,
-            wellness.mood || null,
-            wellness.sleep || '',
-            wellness.nutrition || '',
-            wellness.weight || 0.0,
-            dbRoutineId
-          ]
+      await conn.beginTransaction();
+      try {
+        const [existRoutine]: any = await conn.query(
+          'SELECT id FROM day_routines WHERE client_id = ? AND day_of_week = ?',
+          [clientId, day]
         );
-      } else {
-        const [insResult]: any = await conn.query(
-          `INSERT INTO day_routines (client_id, day_of_week, session_name, notes, is_menstrual_cycle, systolic, diastolic, heart_rate, mood, sleep, nutrition, weight) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            clientId,
-            day,
-            routineData.sessionName || '',
-            routineData.notes || '',
-            routineData.isMenstrualCycle ? 1 : 0,
-            vitals.systolic || 0,
-            vitals.diastolic || 0,
-            vitals.heartRate || 0,
-            wellness.mood || null,
-            wellness.sleep || '',
-            wellness.nutrition || '',
-            wellness.weight || 0.0
-          ]
-        );
-        dbRoutineId = insResult.insertId;
-      }
 
-      // Delete old sets
-      const [oldExIds]: any = await conn.query(
-        'SELECT id FROM routine_exercises WHERE routine_id = ?',
-        [dbRoutineId]
-      );
-      const exIds = oldExIds.map((e: any) => e.id);
-      if (exIds.length > 0) {
-        const placeholders = exIds.map(() => '?').join(',');
-        await conn.query(
-          `DELETE FROM exercise_sets WHERE routine_exercise_id IN (${placeholders})`,
-          exIds
-        );
-      }
-      await conn.query('DELETE FROM routine_exercises WHERE routine_id = ?', [dbRoutineId]);
-
-      // Re-insert exercises and sets
-      if (routineData.exercises && Array.isArray(routineData.exercises)) {
-        for (let exIndex = 0; exIndex < routineData.exercises.length; exIndex++) {
-          const ex = routineData.exercises[exIndex];
-          const exId = ex.id || `ve_auto_${dbRoutineId}_${exIndex}_${Date.now()}`;
-
+        let dbRoutineId: number;
+        if (existRoutine && existRoutine.length > 0) {
+          dbRoutineId = existRoutine[0].id;
           await conn.query(
-            `INSERT INTO routine_exercises (id, routine_id, order_index, pattern, exercise_name, sets_target, sets_note, reps_target, rest_time, rpe, progression_prompted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `UPDATE day_routines SET session_name=?, notes=?, is_menstrual_cycle=?, systolic=?, diastolic=?, heart_rate=?, mood=?, sleep=?, nutrition=?, weight=? WHERE id=?`,
             [
-              exId,
-              dbRoutineId,
-              ex.order || '',
-              ex.pattern || '',
-              ex.name || '',
-              ex.setsTarget || '',
-              ex.setsNote || '',
-              ex.repsTarget || '',
-              ex.rest || '',
-              ex.rpe || 0,
-              ex.progressionPrompted ? 1 : 0
+              routineData.sessionName || '',
+              routineData.notes || '',
+              routineData.isMenstrualCycle ? 1 : 0,
+              vitals.systolic || 0,
+              vitals.diastolic || 0,
+              vitals.heartRate || 0,
+              wellness.mood || null,
+              wellness.sleep || '',
+              wellness.nutrition || '',
+              wellness.weight || 0.0,
+              dbRoutineId
             ]
           );
+        } else {
+          const [insResult]: any = await conn.query(
+            `INSERT INTO day_routines (client_id, day_of_week, session_name, notes, is_menstrual_cycle, systolic, diastolic, heart_rate, mood, sleep, nutrition, weight) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              clientId,
+              day,
+              routineData.sessionName || '',
+              routineData.notes || '',
+              routineData.isMenstrualCycle ? 1 : 0,
+              vitals.systolic || 0,
+              vitals.diastolic || 0,
+              vitals.heartRate || 0,
+              wellness.mood || null,
+              wellness.sleep || '',
+              wellness.nutrition || '',
+              wellness.weight || 0.0
+            ]
+          );
+          dbRoutineId = insResult.insertId;
+        }
 
-          if (ex.sets && Array.isArray(ex.sets)) {
-            for (let sIndex = 0; sIndex < ex.sets.length; sIndex++) {
-              const s = ex.sets[sIndex];
-              const setId = `${exId}_s${sIndex}`;
-              const completedVal = resetSetsCompleted ? 0 : (s.completed ? 1 : 0);
+        // Delete old sets first, then old routine_exercises
+        const [oldExIds]: any = await conn.query(
+          'SELECT id FROM routine_exercises WHERE routine_id = ?',
+          [dbRoutineId]
+        );
+        const exIds = oldExIds.map((e: any) => e.id);
+        if (exIds.length > 0) {
+          const placeholders = exIds.map(() => '?').join(',');
+          await conn.query(
+            `DELETE FROM exercise_sets WHERE routine_exercise_id IN (${placeholders})`,
+            exIds
+          );
+        }
+        await conn.query('DELETE FROM routine_exercises WHERE routine_id = ?', [dbRoutineId]);
+
+        // Re-insert exercises and sets in order
+        if (routineData.exercises && Array.isArray(routineData.exercises)) {
+          for (let exIndex = 0; exIndex < routineData.exercises.length; exIndex++) {
+            const ex = routineData.exercises[exIndex];
+            const exId = ex.id || `ve_auto_${dbRoutineId}_${exIndex}_${Date.now()}`;
+
+            await conn.query(
+              `INSERT INTO routine_exercises (id, routine_id, order_index, pattern, exercise_name, sets_target, sets_note, reps_target, rest_time, rpe, progression_prompted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                exId,
+                dbRoutineId,
+                ex.order || '',
+                ex.pattern || '',
+                ex.name || '',
+                ex.setsTarget || '',
+                ex.setsNote || '',
+                ex.repsTarget || '',
+                ex.rest || '',
+                ex.rpe || 0,
+                ex.progressionPrompted ? 1 : 0
+              ]
+            );
+
+            if (ex.sets && Array.isArray(ex.sets)) {
+              for (let sIndex = 0; sIndex < ex.sets.length; sIndex++) {
+                const s = ex.sets[sIndex];
+                const setId = `${exId}_s${sIndex}`;
+                const completedVal = resetSetsCompleted ? 0 : (s.completed ? 1 : 0);
+                await conn.query(
+                  `INSERT INTO exercise_sets (id, routine_exercise_id, set_number, weight, reps, completed) VALUES (?, ?, ?, ?, ?, ?)`,
+                  [
+                    setId,
+                    exId,
+                    s.setNumber || sIndex + 1,
+                    Number(s.weight) || 0,
+                    Number(s.reps) || 0,
+                    completedVal
+                  ]
+                );
+              }
+            }
+          }
+        }
+
+        // Cardio
+        try {
+          await conn.query('DELETE FROM cardio_activities WHERE routine_id = ?', [dbRoutineId]);
+          if (routineData.cardio && Array.isArray(routineData.cardio)) {
+            for (let cIndex = 0; cIndex < routineData.cardio.length; cIndex++) {
+              const card = routineData.cardio[cIndex];
+              const cardId = card.id || `vc_${dbRoutineId}_${cIndex}_${Date.now()}`;
               await conn.query(
-                `INSERT INTO exercise_sets (id, routine_exercise_id, set_number, weight, reps, completed) VALUES (?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO cardio_activities (id, routine_id, type, timing, time, distance, completed) VALUES (?, ?, ?, ?, ?, ?, ?)`,
                 [
-                  setId,
-                  exId,
-                  s.setNumber || sIndex + 1,
-                  s.weight || 0,
-                  s.reps || 0,
-                  completedVal
+                  cardId,
+                  dbRoutineId,
+                  card.type || '',
+                  card.timing || '',
+                  card.time || 0,
+                  card.distance || 0,
+                  card.completed ? 1 : 0
                 ]
               );
             }
           }
+        } catch (errCardio) {
+          console.warn('Cardio sync notice:', errCardio);
         }
-      }
 
-      // Cardio
-      try {
-        await conn.query('DELETE FROM cardio_activities WHERE routine_id = ?', [dbRoutineId]);
-        if (routineData.cardio && Array.isArray(routineData.cardio)) {
-          for (let cIndex = 0; cIndex < routineData.cardio.length; cIndex++) {
-            const card = routineData.cardio[cIndex];
-            const cardId = card.id || `vc_${dbRoutineId}_${cIndex}_${Date.now()}`;
-            await conn.query(
-              `INSERT INTO cardio_activities (id, routine_id, type, timing, time, distance, completed) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-              [
-                cardId,
-                dbRoutineId,
-                card.type || '',
-                card.timing || '',
-                card.time || 0,
-                card.distance || 0,
-                card.completed ? 1 : 0
-              ]
-            );
-          }
-        }
-      } catch (errCardio) {
-        console.warn('Cardio sync notice:', errCardio);
+        await conn.commit();
+      } catch (err) {
+        await conn.rollback();
+        throw err;
       }
     };
 

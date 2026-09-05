@@ -543,7 +543,7 @@ export default function Home() {
     }
   }, []);
 
-  const handleVipUpdateSet = useCallback((exIndex: number, setIndex: number, field: 'weight' | 'reps', value: number) => {
+  const handleVipUpdateSet = useCallback((exIndex: number, setIndex: number, field: 'weight' | 'reps', value: number | string) => {
     if (!loggedVipClient) return;
     const day = loggedVipClient.activeDay || loggedVipClient.assignedDays?.[0] || 'Lunes';
     setLoggedVipClient(prev => {
@@ -640,7 +640,14 @@ export default function Home() {
       notes,
       exercisesCount: routine.exercises?.length || 0,
       setsCount: routine.exercises?.reduce((sum, ex) => sum + (ex.sets?.filter(s => s.completed)?.length || 0), 0) || 0,
-      exercises: routine.exercises?.map(ex => ({ name: ex.name, sets: ex.sets?.map(s => ({ weight: s.weight, reps: s.reps, completed: s.completed || false })) || [] })) || [],
+      exercises: routine.exercises?.map(ex => ({
+        name: ex.name,
+        sets: ex.sets?.map(s => ({
+          weight: Number(s.weight) || 0,
+          reps: Number(s.reps) || 0,
+          completed: Boolean(s.completed),
+        })) || []
+      })) || [],
       readiness: {
         mood: wellness?.mood !== null && wellness?.mood !== undefined ? String(wellness.mood) : undefined,
         sleep: wellness?.sleep || undefined,

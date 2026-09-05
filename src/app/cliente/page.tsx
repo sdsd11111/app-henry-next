@@ -248,7 +248,11 @@ function ClientePortalContent() {
         },
         exercises: exercises.map((ex) => ({
           name: ex.name,
-          sets: (ex.sets || []).map((s) => ({ weight: s.weight, reps: s.reps, completed: Boolean(s.completed) })),
+          sets: (ex.sets || []).map((s) => ({
+            weight: Number(s.weight) || 0,
+            reps: Number(s.reps) || 0,
+            completed: Boolean(s.completed),
+          })),
         })),
       };
 

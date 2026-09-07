@@ -481,20 +481,22 @@ export default function Home() {
 
   const handleAddBlankExercise = useCallback(() => {
     const day = getActiveDay();
-    const newEx = {
-      id: `ve_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-      name: '',
-      pattern: '',
-      order: '',
-      setsTarget: '3',
-      repsTarget: '10',
-      rest: '60s',
-      rpe: 7,
-      sets: [{ setNumber: 1, weight: 0, reps: 10, completed: false }, { setNumber: 2, weight: 0, reps: 10, completed: false }, { setNumber: 3, weight: 0, reps: 10, completed: false }],
-    };
     setVipClients(prev => prev.map(c => {
       if (c.id !== selectedVipClientId) return c;
       const routine = c.routines?.[day] ?? emptyRoutine();
+      const exCount = (routine.exercises || []).length;
+      const orderLetter = String.fromCharCode(65 + exCount);
+      const newEx = {
+        id: `ve_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        name: '',
+        pattern: '',
+        order: orderLetter,
+        setsTarget: '3',
+        repsTarget: '10',
+        rest: 'Lo justo para rendir al 100% en cada serie',
+        rpe: 7,
+        sets: [{ setNumber: 1, weight: 0, reps: 10, completed: false }, { setNumber: 2, weight: 0, reps: 10, completed: false }, { setNumber: 3, weight: 0, reps: 10, completed: false }],
+      };
       const updatedRoutine = { ...routine, exercises: [...(routine.exercises || []), newEx] };
       syncCoachRoutineToDb(c.id, day, updatedRoutine);
       return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
@@ -503,20 +505,22 @@ export default function Home() {
 
   const handleAddCatalogExercise = useCallback((name: string) => {
     const day = getActiveDay();
-    const newEx = {
-      id: `ve_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-      name,
-      pattern: '',
-      order: '',
-      setsTarget: '3',
-      repsTarget: '10',
-      rest: '60s',
-      rpe: 7,
-      sets: [{ setNumber: 1, weight: 0, reps: 10, completed: false }, { setNumber: 2, weight: 0, reps: 10, completed: false }, { setNumber: 3, weight: 0, reps: 10, completed: false }],
-    };
     setVipClients(prev => prev.map(c => {
       if (c.id !== selectedVipClientId) return c;
       const routine = c.routines?.[day] ?? emptyRoutine();
+      const exCount = (routine.exercises || []).length;
+      const orderLetter = String.fromCharCode(65 + exCount);
+      const newEx = {
+        id: `ve_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        name,
+        pattern: '',
+        order: orderLetter,
+        setsTarget: '3',
+        repsTarget: '10',
+        rest: 'Lo justo para rendir al 100% en cada serie',
+        rpe: 7,
+        sets: [{ setNumber: 1, weight: 0, reps: 10, completed: false }, { setNumber: 2, weight: 0, reps: 10, completed: false }, { setNumber: 3, weight: 0, reps: 10, completed: false }],
+      };
       const updatedRoutine = { ...routine, exercises: [...(routine.exercises || []), newEx] };
       syncCoachRoutineToDb(c.id, day, updatedRoutine);
       return { ...c, routines: { ...c.routines, [day]: updatedRoutine } };
@@ -966,6 +970,7 @@ function CoachLoginView({ onLogin }: {
               <input
                 type="text"
                 required
+                autoComplete="username"
                 placeholder="Ej: henry_coach"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -985,6 +990,7 @@ function CoachLoginView({ onLogin }: {
               <input
                 type="password"
                 required
+                autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

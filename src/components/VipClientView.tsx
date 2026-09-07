@@ -49,6 +49,9 @@ export default function VipClientView({
     suggestedWeight: number;
   } | null>(null);
 
+  // Overloads programados para la próxima sesión: { [exIndex]: nuevoPeso }
+  const [stagedOverloads, setStagedOverloads] = useState<Record<number, number>>({});
+
   // If client is not logged in, render exclusive login card
   if (!client) {
     const handleFormSubmit = async (e: React.FormEvent) => {
@@ -93,6 +96,7 @@ export default function VipClientView({
                 <input
                   type="text"
                   required
+                  autoComplete="username"
                   placeholder="Ej: silvia_vip"
                   value={loginUser}
                   onChange={(e) => setLoginUser(e.target.value)}
@@ -112,6 +116,7 @@ export default function VipClientView({
                 <input
                   type="password"
                   required
+                  autoComplete="current-password"
                   placeholder="••••••••"
                   value={loginPass}
                   onChange={(e) => setLoginPass(e.target.value)}
@@ -205,9 +210,6 @@ export default function VipClientView({
       });
     }
   };
-
-  // Overloads programados para la próxima sesión: { [exIndex]: nuevoPeso }
-  const [stagedOverloads, setStagedOverloads] = useState<Record<number, number>>({});
 
   const handleApplyOverload = () => {
     if (!pendingOverload) return;

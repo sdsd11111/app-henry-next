@@ -437,12 +437,12 @@ export default function VipAdminView({
                           <td className="p-2.5 min-w-[60px]">
                             <input
                               type="text"
-                              value={ex.order !== undefined && ex.order !== null ? ex.order : ''}
+                              value={ex.order !== undefined && ex.order !== null && ex.order !== '' ? ex.order : String.fromCharCode(65 + exIdx)}
                               onFocus={(e) => e.target.select()}
                               onChange={(e) =>
                                 onUpdateExerciseField(exIdx, 'order', e.target.value)
                               }
-                              className="w-12 text-center font-sora-bold bg-white border border-slate-300 p-1.5 text-xs text-slate-800 focus:border-[#004b73] focus:outline-none shadow-xs"
+                              className="w-12 text-center font-sora-bold bg-white border border-slate-300 p-1.5 text-xs text-slate-800 focus:border-[#004b73] focus:outline-none shadow-xs uppercase"
                             />
                           </td>
                           <td className="p-2.5 min-w-[150px]">

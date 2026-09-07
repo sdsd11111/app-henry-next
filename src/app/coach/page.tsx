@@ -255,7 +255,7 @@ export default function CoachPage() {
           setsTarget: '3',
           setsNote: 'Misma carga en todas las series.',
           repsTarget: '8-10',
-          rest: 'Lo justo para rendir al 100%',
+          rest: 'Lo justo para rendir al 100% en cada serie',
           rpe: 8,
           sets: [
             { id: 'vs_1', setNumber: 1, weight: 0, reps: 0, completed: false },
@@ -290,7 +290,7 @@ export default function CoachPage() {
           setsTarget: '3',
           setsNote: 'Misma carga en todas las series.',
           repsTarget: '8-10',
-          rest: 'Lo justo para rendir al 100%',
+          rest: 'Lo justo para rendir al 100% en cada serie',
           rpe: 8,
           sets: [
             { id: 'vs_1', setNumber: 1, weight: 0, reps: 0, completed: false },
@@ -507,6 +507,7 @@ function CoachLoginInline({
               <input
                 type="text"
                 required
+                autoComplete="username"
                 placeholder="Ej: henry_coach"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -526,6 +527,7 @@ function CoachLoginInline({
               <input
                 type="password"
                 required
+                autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

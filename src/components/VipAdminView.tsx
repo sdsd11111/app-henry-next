@@ -380,33 +380,34 @@ export default function VipAdminView({
                 </div>
               </div>
 
-              <div className="overflow-x-auto w-full">
-                <table className="w-full text-xs text-left border-collapse min-w-[850px]">
+              {/* Tabla de Rutina con scroll horizontal blindado */}
+              <div className="overflow-x-auto w-full max-w-full pb-3 touch-pan-x border-b border-slate-200">
+                <table className="w-full text-xs text-left border-collapse min-w-[850px] table-auto">
                   <thead>
                     <tr
                       className="bg-[#003857] text-white font-sora-bold italic uppercase text-xs tracking-wide divide-x divide-white/15 border-b-2 border-[#004b73] text-center shadow-md"
                       style={{ color: '#FFFFFF' }}
                     >
-                      <th className="py-3.5 px-2 w-16" style={{ color: '#FFFFFF' }}>
+                      <th className="py-3.5 px-2 min-w-[60px] w-16" style={{ color: '#FFFFFF' }}>
                         ORDEN
                       </th>
-                      <th className="py-3.5 px-3 w-44" style={{ color: '#FFFFFF' }}>
+                      <th className="py-3.5 px-3 min-w-[150px] w-40" style={{ color: '#FFFFFF' }}>
                         PATRÓN
                       </th>
-                      <th className="py-3.5 px-3 w-52" style={{ color: '#FFFFFF' }}>
+                      <th className="py-3.5 px-3 min-w-[200px] w-52" style={{ color: '#FFFFFF' }}>
                         EJERCICIOS
                       </th>
-                      <th className="py-3.5 px-3 w-64" style={{ color: '#FFFFFF' }}>
+                      <th className="py-3.5 px-3 min-w-[220px] w-64" style={{ color: '#FFFFFF' }}>
                         SERIES
                       </th>
-                      <th className="py-3.5 px-3 w-32" style={{ color: '#FFFFFF' }}>
+                      <th className="py-3.5 px-3 min-w-[120px] w-32" style={{ color: '#FFFFFF' }}>
                         REPETICIONES
                       </th>
-                      <th className="py-3.5 px-3 w-48" style={{ color: '#FFFFFF' }}>
+                      <th className="py-3.5 px-3 min-w-[150px] w-44" style={{ color: '#FFFFFF' }}>
                         DESCANSO
                       </th>
                       <th
-                        className="py-3.5 px-3 w-44 not-italic bg-[#1A3644] text-[#00fff6] font-sora-bold shadow-inner"
+                        className="py-3.5 px-3 min-w-[140px] w-40 not-italic bg-[#1A3644] text-[#00fff6] font-sora-bold shadow-inner"
                         style={{ color: '#00fff6' }}
                       >
                         ACCIONES Y FILAS
@@ -433,23 +434,24 @@ export default function VipAdminView({
                             exIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'
                           } divide-x divide-slate-200 border-b border-slate-200 transition text-center`}
                         >
-                          <td className="p-2">
+                          <td className="p-2.5 min-w-[60px]">
                             <input
                               type="text"
-                              value={ex.order || String.fromCharCode(65 + exIdx)}
+                              value={ex.order !== undefined && ex.order !== null ? ex.order : ''}
+                              onFocus={(e) => e.target.select()}
                               onChange={(e) =>
                                 onUpdateExerciseField(exIdx, 'order', e.target.value)
                               }
                               className="w-12 text-center font-sora-bold bg-white border border-slate-300 p-1.5 text-xs text-slate-800 focus:border-[#004b73] focus:outline-none shadow-xs"
                             />
                           </td>
-                          <td className="p-2">
+                          <td className="p-2.5 min-w-[150px]">
                             <select
                               value={ex.pattern || 'Bisagra de cadera'}
                               onChange={(e) =>
                                 onUpdateExerciseField(exIdx, 'pattern', e.target.value)
                               }
-                              className="w-full text-left italic bg-white border border-slate-300 py-1.5 pl-2 pr-4 text-xs text-slate-700 focus:border-[#004b73] focus:outline-none shadow-xs font-sora-medium cursor-pointer truncate"
+                              className="w-full font-sora-medium text-xs bg-white border border-slate-300 p-1.5 text-[#1A3644] focus:border-[#004b73] focus:outline-none shadow-xs truncate cursor-pointer"
                             >
                               <optgroup label="Patrones Principales">
                                 {PATRONES_PRINCIPALES.map((p) => (
@@ -472,7 +474,7 @@ export default function VipAdminView({
                                 )}
                             </select>
                           </td>
-                          <td className="p-2">
+                          <td className="p-2.5 min-w-[200px]">
                             <div className="flex flex-col gap-1.5">
                               <div className="relative flex items-center">
                                 <input
@@ -484,6 +486,9 @@ export default function VipAdminView({
                                         ex.name.slice(1).toLowerCase()
                                       : ''
                                   }
+                                  onFocus={(e) => {
+                                    if (!ex.name) e.target.select();
+                                  }}
                                   onChange={(e) =>
                                     onUpdateExerciseField(exIdx, 'name', e.target.value)
                                   }
@@ -523,33 +528,37 @@ export default function VipAdminView({
                               </button>
                             </div>
                           </td>
-                          <td className="p-2 space-y-1.5">
-                            <input
-                              type="text"
-                              value={ex.setsTarget || (ex.sets ? ex.sets.length : '3')}
-                              onChange={(e) =>
-                                onUpdateExerciseField(exIdx, 'setsTarget', e.target.value)
-                              }
-                              className="w-full text-center font-sora-bold text-xs bg-white border border-slate-300 p-1 text-slate-900 focus:border-[#004b73] focus:outline-none shadow-xs"
-                              placeholder="Ej: 3 o 2+AMRAP"
-                            />
-                            <textarea
-                              rows={2}
-                              value={
-                                ex.setsNote !== undefined
-                                  ? ex.setsNote
-                                  : 'Misma carga en todas las series. Auméntala un 2-3% cada vez que alcances el objetivo en todas ellas.'
-                              }
-                              onChange={(e) =>
-                                onUpdateExerciseField(exIdx, 'setsNote', e.target.value)
-                              }
-                              className="w-full text-[10px] text-slate-600 font-poppins-regular bg-white border border-slate-300 p-1 text-center focus:border-[#004b73] focus:outline-none shadow-xs leading-tight"
-                            />
+                          <td className="p-2.5 min-w-[220px]">
+                            <div className="flex flex-col gap-1.5 w-full">
+                              <input
+                                type="text"
+                                value={ex.setsTarget !== undefined && ex.setsTarget !== null ? ex.setsTarget : (ex.sets ? String(ex.sets.length) : '')}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) =>
+                                  onUpdateExerciseField(exIdx, 'setsTarget', e.target.value)
+                                }
+                                className="w-full text-center font-sora-bold text-xs bg-white border border-slate-300 p-1.5 text-slate-900 focus:border-[#004b73] focus:outline-none shadow-xs"
+                                placeholder="Ej: 3 o 2+AMRAP"
+                              />
+                              <textarea
+                                rows={2}
+                                value={
+                                  ex.setsNote !== undefined
+                                    ? ex.setsNote
+                                    : 'Misma carga en todas las series. Auméntala un 2-3% cada vez que alcances el objetivo en todas ellas.'
+                                }
+                                onChange={(e) =>
+                                  onUpdateExerciseField(exIdx, 'setsNote', e.target.value)
+                                }
+                                className="w-full text-[10px] text-slate-600 font-poppins-regular bg-white border border-slate-300 p-1 text-center focus:border-[#004b73] focus:outline-none shadow-xs leading-tight resize-none"
+                              />
+                            </div>
                           </td>
-                          <td className="p-2">
+                          <td className="p-2.5 min-w-[120px]">
                             <input
                               type="text"
-                              value={ex.repsTarget || '8'}
+                              value={ex.repsTarget !== undefined && ex.repsTarget !== null ? ex.repsTarget : ''}
+                              onFocus={(e) => e.target.select()}
                               onChange={(e) =>
                                 onUpdateExerciseField(exIdx, 'repsTarget', e.target.value)
                               }
@@ -557,14 +566,20 @@ export default function VipAdminView({
                               placeholder="Ej: 8, 10"
                             />
                           </td>
-                          <td className="p-2">
+                          <td className="p-2.5 min-w-[150px]">
                             <input
                               type="text"
-                              value={ex.rest || 'Lo justo para rendir al 100% en cada serie'}
+                              value={ex.rest !== undefined && ex.rest !== null ? ex.rest : ''}
+                              onFocus={(e) => {
+                                if (e.target.value === 'Lo justo para rendir al 100% en cada serie') {
+                                  e.target.select();
+                                }
+                              }}
                               onChange={(e) =>
                                 onUpdateExerciseField(exIdx, 'rest', e.target.value)
                               }
                               className="w-full text-center font-poppins-regular text-xs bg-white border border-slate-300 p-1.5 text-slate-700 focus:border-[#004b73] focus:outline-none shadow-xs"
+                              placeholder="Descanso..."
                             />
                           </td>
                           <td className="p-2.5 bg-slate-50 space-y-2 text-center">

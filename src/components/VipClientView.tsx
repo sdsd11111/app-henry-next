@@ -645,7 +645,11 @@ export default function VipClientView({
                                 <input
                                   type="text"
                                   inputMode="decimal"
-                                  value={set.weight !== undefined && set.weight !== null ? set.weight : ''}
+                                  value={
+                                    set.weight !== undefined && set.weight !== null && set.weight !== ''
+                                      ? (!isNaN(Number(set.weight)) ? String(Number(set.weight)) : String(set.weight))
+                                      : ''
+                                  }
                                   onFocus={(e) => {
                                     if (e.target.value === '0') e.target.select();
                                   }}

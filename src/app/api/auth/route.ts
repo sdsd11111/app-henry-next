@@ -92,7 +92,7 @@ export async function POST(request: Request) {
                 id: ex.id, order: ex.order_index, pattern: ex.pattern || '', name: ex.exercise_name,
                 setsTarget: ex.sets_target || '', setsNote: ex.sets_note || '', repsTarget: ex.reps_target || '',
                 rest: ex.rest_time || '', rpe: ex.rpe || 0, progressionPrompted: Boolean(ex.progression_prompted),
-                sets: sets.map((s: any) => ({ id: s.id, setNumber: s.set_number, weight: s.weight, reps: s.reps, completed: Boolean(s.completed) })),
+                sets: sets.map((s: any) => ({ id: s.id, setNumber: s.set_number, weight: s.weight !== null && s.weight !== undefined ? Number(s.weight) : 0, reps: s.reps !== null && s.reps !== undefined ? Number(s.reps) : 0, completed: Boolean(s.completed) })),
               });
             }
             let cardio: any[] = [];

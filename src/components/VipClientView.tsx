@@ -35,6 +35,7 @@ export default function VipClientView({
 }: VipClientViewProps) {
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [sessionNotes, setSessionNotes] = useState('');
@@ -114,14 +115,22 @@ export default function VipClientView({
                   <i className="fa-solid fa-key text-xs"></i>
                 </span>
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   autoComplete="current-password"
                   placeholder="••••••••"
                   value={loginPass}
                   onChange={(e) => setLoginPass(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 bg-[#F0F6F9] border border-[#E2E8F0] text-xs font-mono text-[#1A3644] focus:border-[#004b73] focus:outline-none transition"
+                  className="w-full pl-9 pr-10 py-2.5 bg-[#F0F6F9] border border-[#E2E8F0] text-xs font-mono text-[#1A3644] focus:border-[#004b73] focus:outline-none transition"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-[#004b73] transition cursor-pointer"
+                  title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                >
+                  <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'} text-xs`}></i>
+                </button>
               </div>
             </div>
 
@@ -654,13 +663,13 @@ export default function VipClientView({
                                     if (e.target.value === '0') e.target.select();
                                   }}
                                   onChange={(e) => {
-                                    const val = e.target.value;
+                                    const val = e.target.value.replace(',', '.');
                                     if (val === '' || /^\d*\.?\d*$/.test(val)) {
                                       onUpdateSet(exIndex, setIndex, 'weight', val);
                                     }
                                   }}
                                   onBlur={(e) => {
-                                    const raw = e.target.value;
+                                    const raw = e.target.value.replace(',', '.');
                                     const num = parseFloat(raw);
                                     // Save clean number (removes trailing .00 etc)
                                     onUpdateSet(exIndex, setIndex, 'weight', isNaN(num) ? 0 : num);

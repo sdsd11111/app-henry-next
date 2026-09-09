@@ -464,6 +464,7 @@ function CoachLoginInline({
 }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -525,14 +526,22 @@ function CoachLoginInline({
                 <i className="fa-solid fa-lock text-xs"></i>
               </span>
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 bg-[#F0F6F9] border border-[#E2E8F0] text-xs font-mono text-[#1A3644] focus:border-[#004b73] focus:outline-none transition"
+                className="w-full pl-9 pr-10 py-2.5 bg-[#F0F6F9] border border-[#E2E8F0] text-xs font-mono text-[#1A3644] focus:border-[#004b73] focus:outline-none transition"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-[#004b73] transition cursor-pointer"
+                title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+              >
+                <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'} text-xs`}></i>
+              </button>
             </div>
           </div>
 

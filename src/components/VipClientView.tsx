@@ -646,8 +646,8 @@ export default function VipClientView({
                                   type="text"
                                   inputMode="decimal"
                                   value={
-                                    set.weight !== undefined && set.weight !== null && set.weight !== ''
-                                      ? (!isNaN(Number(set.weight)) ? String(Number(set.weight)) : String(set.weight))
+                                    set.weight !== undefined && set.weight !== null
+                                      ? String(set.weight)
                                       : ''
                                   }
                                   onFocus={(e) => {
@@ -660,7 +660,9 @@ export default function VipClientView({
                                     }
                                   }}
                                   onBlur={(e) => {
-                                    const num = parseFloat(e.target.value);
+                                    const raw = e.target.value;
+                                    const num = parseFloat(raw);
+                                    // Save clean number (removes trailing .00 etc)
                                     onUpdateSet(exIndex, setIndex, 'weight', isNaN(num) ? 0 : num);
                                   }}
                                   className="w-14 bg-white border border-slate-300 px-1.5 py-0.5 text-xs font-sora-bold text-center text-[#1A3644] focus:border-[#004b73] focus:outline-none shadow-sm"

@@ -25,23 +25,36 @@ export default function CoachPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+  const saveQueueRef = useRef<Record<string, Promise<any>>>({});
 
-  // Helper: Persist routine changes directly to MySQL
+  // Helper: Persist routine changes directly to MySQL (serialized per client to avoid race conditions/deadlocks)
   const syncRoutineToDb = useCallback(async (clientId: string, day: string, routine: DayRoutine) => {
-    try {
-      await fetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'save_routine',
-          clientId,
-          day,
-          routine,
-        }),
-      });
-    } catch (e) {
-      console.error('Error sincronizando rutina a MySQL:', e);
-    }
+    const queueKey = `${clientId}_${day}`;
+    const previousPromise = saveQueueRef.current[queueKey] || Promise.resolve();
+
+    const currentSave = (async () => {
+      try {
+        await previousPromise;
+      } catch (_) {}
+
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'save_routine',
+            clientId,
+            day,
+            routine,
+          }),
+        });
+      } catch (e) {
+        console.error('Error sincronizando rutina a MySQL:', e);
+      }
+    })();
+
+    saveQueueRef.current[queueKey] = currentSave;
+    return currentSave;
   }, []);
 
   // Modales
@@ -448,7 +461,11 @@ export default function CoachPage() {
             setVipClients((prev) =>
               prev.map((c) =>
                 c.id === targetId
-                  ? { ...c, routines: updatedRoutines, assignedDays: updatedAssignedDays }
+                  ? {
+                      ...c,
+                      routines: { ...(c.routines || {}), ...updatedRoutines },
+                      assignedDays: updatedAssignedDays,
+                    }
                   : c
               )
             );

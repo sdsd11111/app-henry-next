@@ -48,6 +48,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const isInitialLoad = useRef(true);
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+  const saveQueueRef = useRef<Record<string, Promise<any>>>({});
 
   // ── Modals ──
   const [modalAddFloor, setModalAddFloor] = useState(false);
@@ -131,45 +132,13 @@ export default function Home() {
     loadData();
   }, []);
 
-  // ── Auto-save debounced sync to MySQL ──
+  // ── Note: Routine and client updates are already saved individually via save_routine / API endpoints.
+  // We clean up any pending timer on unmount.
   useEffect(() => {
-    if (isInitialLoad.current || vipClients.length === 0) return;
-
-    if (autoSaveTimer.current) {
-      clearTimeout(autoSaveTimer.current);
-    }
-
-    autoSaveTimer.current = setTimeout(async () => {
-      try {
-        const routinesPayload: Record<string, any> = {};
-        for (const vc of vipClients) {
-          if (vc.routines) {
-            for (const [day, routine] of Object.entries(vc.routines)) {
-              routinesPayload[`routine_${vc.id}_${day}`] = routine;
-            }
-          }
-        }
-        await fetch('/api/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'sync_all',
-            payload: {
-              clients: floorClients,
-              vip_clients: vipClients,
-              routines: routinesPayload,
-            },
-          }),
-        });
-      } catch (err) {
-        console.error('Auto-sync error:', err);
-      }
-    }, 1500);
-
     return () => {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
-  }, [vipClients, floorClients]);
+  }, []);
 
   // ──────────────────────────────────────────
   // COACH LOGIN
@@ -428,17 +397,29 @@ export default function Home() {
     }));
   }, [getActiveDay]);
 
-  // Helper: persist coach routine change immediately to DB
+  // Helper: persist coach routine change immediately to DB (serialized to avoid deadlocks)
   const syncCoachRoutineToDb = useCallback(async (clientId: string, day: string, routine: DayRoutine) => {
-    try {
-      await fetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save_routine', clientId, day, routine }),
-      });
-    } catch (e) {
-      console.error('Error syncing coach routine:', e);
-    }
+    const queueKey = `${clientId}_${day}`;
+    const previousPromise = saveQueueRef.current[queueKey] || Promise.resolve();
+
+    const currentSave = (async () => {
+      try {
+        await previousPromise;
+      } catch (_) {}
+
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'save_routine', clientId, day, routine }),
+        });
+      } catch (e) {
+        console.error('Error syncing coach routine:', e);
+      }
+    })();
+
+    saveQueueRef.current[queueKey] = currentSave;
+    return currentSave;
   }, []);
 
   const handleUpdateExerciseField = useCallback((exIndex: number, field: string, value: any) => {
@@ -544,20 +525,32 @@ export default function Home() {
   // VIP CLIENT — set updates
   // ──────────────────────────────────────────
   const syncVipRoutineToDb = useCallback(async (clientId: string, day: string, routineData: DayRoutine) => {
-    try {
-      await fetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'save_routine',
-          clientId,
-          routine: routineData,
-          day,
-        }),
-      });
-    } catch (err) {
-      console.error('Error syncing routine to DB:', err);
-    }
+    const queueKey = `${clientId}_${day}`;
+    const previousPromise = saveQueueRef.current[queueKey] || Promise.resolve();
+
+    const currentSave = (async () => {
+      try {
+        await previousPromise;
+      } catch (_) {}
+
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'save_routine',
+            clientId,
+            routine: routineData,
+            day,
+          }),
+        });
+      } catch (err) {
+        console.error('Error syncing routine to DB:', err);
+      }
+    })();
+
+    saveQueueRef.current[queueKey] = currentSave;
+    return currentSave;
   }, []);
 
   const handleVipUpdateSet = useCallback((exIndex: number, setIndex: number, field: 'weight' | 'reps', value: number | string) => {
@@ -888,7 +881,11 @@ export default function Home() {
             setVipClients((prev) =>
               prev.map((c) =>
                 c.id === targetId
-                  ? { ...c, routines: updatedRoutines, assignedDays: updatedAssignedDays }
+                  ? {
+                      ...c,
+                      routines: { ...(c.routines || {}), ...updatedRoutines },
+                      assignedDays: updatedAssignedDays,
+                    }
                   : c
               )
             );

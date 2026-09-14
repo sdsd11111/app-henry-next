@@ -362,7 +362,13 @@ function MagicEditorContent() {
           onClose={() => setModalCloneRoutine(null)}
           onSaveClonedRoutine={async (targetId, updatedRoutines, updatedAssignedDays) => {
             setCrClient((prev) =>
-              prev ? { ...prev, routines: updatedRoutines, assignedDays: updatedAssignedDays } : prev
+              prev
+                ? {
+                    ...prev,
+                    routines: { ...(prev.routines || {}), ...updatedRoutines },
+                    assignedDays: updatedAssignedDays,
+                  }
+                : prev
             );
             try {
               const routinesPayload: Record<string, any> = {};

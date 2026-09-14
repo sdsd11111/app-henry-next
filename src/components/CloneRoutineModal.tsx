@@ -30,9 +30,9 @@ export default function CloneRoutineModal({
   );
   const [selectedDays, setSelectedDays] = useState<Record<string, boolean>>({});
   const [targetDayMappings, setTargetDayMappings] = useState<Record<string, string>>({});
-  const [replaceAssignedDays, setReplaceAssignedDays] = useState<boolean>(true);
-  const [autoAssignDays, setAutoAssignDays] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [importSuccess, setImportSuccess] = useState<boolean>(false);
+  const [importStats, setImportStats] = useState<{ days: number; exercises: number }>({ days: 0, exercises: 0 });
 
   const sourceClient = vipClients.find((c) => c.id === sourceClientId);
 
@@ -47,19 +47,13 @@ export default function CloneRoutineModal({
 
     const initialSelected: Record<string, boolean> = {};
     const initialMapping: Record<string, string> = {};
-    let nonCount = 0;
 
     ALL_WEEK_DAYS.forEach((day) => {
       const routine = sourceClient.routines?.[day];
       const count = routine?.exercises ? routine.exercises.length : 0;
       initialSelected[day] = count > 0;
-
-      if (count > 0 && targetDays.length > 0) {
-        initialMapping[day] = targetDays[nonCount % targetDays.length];
-        nonCount++;
-      } else {
-        initialMapping[day] = day;
-      }
+      // Siempre mapea al mismo día por defecto — el usuario puede cambiarlo manualmente
+      initialMapping[day] = day;
     });
 
     setSelectedDays(initialSelected);
@@ -113,33 +107,24 @@ export default function CloneRoutineModal({
 
     setIsProcessing(true);
     try {
-      const newRoutines: Record<string, DayRoutine> = { ...(targetClient.routines || {}) };
+      // Solo construir las rutinas que se clonan realmente (NO todas las del cliente)
+      const clonedRoutines: Record<string, DayRoutine> = {};
       let totalImported = 0;
 
-      // Si reemplazamos días asignados, la agenda del cliente destino será EXACTAMENTE los días importados
-      let newAssignedDays: string[];
-      if (replaceAssignedDays) {
-        // Solo los días que se han importado / asignado en el mapeo
-        const assignedTargetDays = Array.from(new Set(daysToImport.map((d) => targetDayMappings[d] || d)));
-        newAssignedDays = assignedTargetDays;
-      } else {
-        newAssignedDays = [...(targetClient.assignedDays || [])];
-        if (autoAssignDays) {
-          for (const sourceDay of daysToImport) {
-            const targetDay = targetDayMappings[sourceDay] || sourceDay;
-            if (!newAssignedDays.includes(targetDay)) {
-              newAssignedDays.push(targetDay);
-            }
-          }
-        }
+      // Fusionar días asignados: existentes + nuevos, ordenados
+      const mergedDaysSet = new Set<string>(targetClient.assignedDays || []);
+      for (const sourceDay of daysToImport) {
+        const targetDay = targetDayMappings[sourceDay] || sourceDay;
+        mergedDaysSet.add(targetDay);
       }
+      const newAssignedDays = ALL_WEEK_DAYS.filter((d) => mergedDaysSet.has(d));
 
       for (const sourceDay of daysToImport) {
         const targetDay = targetDayMappings[sourceDay] || sourceDay;
         const sourceRoutine = sourceClient.routines?.[sourceDay];
 
         if (sourceRoutine && sourceRoutine.exercises && sourceRoutine.exercises.length > 0) {
-          newRoutines[targetDay] = cloneRoutineDeep(sourceRoutine);
+          clonedRoutines[targetDay] = cloneRoutineDeep(sourceRoutine);
           totalImported += sourceRoutine.exercises.length;
         }
       }
@@ -150,11 +135,13 @@ export default function CloneRoutineModal({
         return;
       }
 
-      await onSaveClonedRoutine(targetClient.id, newRoutines, newAssignedDays);
-      alert(
-        `🎉 ¡Rutina copiada con éxito!\nSe importaron ${daysToImport.length} día(s) con ${totalImported} ejercicios desde "${sourceClient.name}" hacia "${targetClient.name}".`
-      );
-      onClose();
+      // Pasar solo las rutinas clonadas — el padre hace el merge con las existentes
+      await onSaveClonedRoutine(targetClient.id, clonedRoutines, newAssignedDays);
+
+      // Mostrar pantalla de éxito (sin alert bloqueante)
+      setImportStats({ days: Object.keys(clonedRoutines).length, exercises: totalImported });
+      setImportSuccess(true);
+      setTimeout(() => onClose(), 2200);
     } catch (err) {
       console.error('Error clonando rutina:', err);
       alert('Error al clonar rutina en la base de datos.');
@@ -166,11 +153,11 @@ export default function CloneRoutineModal({
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn">
       <div className="bg-white border border-[#e4e4e7] rounded-none sm:rounded-2xl w-full max-w-lg max-h-[90vh] shadow-2xl overflow-hidden flex flex-col my-auto">
-        {/* Header con estilo oficial #004b73 */}
+        {/* Header */}
         <div className="p-3.5 sm:p-4 border-b border-[#003857] flex justify-between items-center bg-gradient-to-r from-[#004b73] to-[#003857] text-white shrink-0">
           <h3 className="text-sm sm:text-base font-sora-bold text-white flex items-center gap-2 truncate">
-            <i className="fa-solid fa-file-import text-amber-400 text-base"></i>
-            <span>Importar Rutina desde otro Cliente</span>
+            <i className={`fa-solid ${importSuccess ? 'fa-circle-check text-emerald-400' : 'fa-file-import text-amber-400'} text-base`}></i>
+            <span>{importSuccess ? '¡Rutina Importada!' : 'Importar Rutina desde otro Cliente'}</span>
           </h3>
           <button
             onClick={onClose}
@@ -316,41 +303,17 @@ export default function CloneRoutineModal({
             </div>
           </div>
 
-          {/* Opciones de asignación de días en agenda */}
-          <div className="space-y-2 pt-1 border-t border-slate-100">
-            <label className="flex items-start gap-2 text-[11px] text-slate-700 font-sora-medium bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={replaceAssignedDays}
-                onChange={(e) => {
-                  setReplaceAssignedDays(e.target.checked);
-                  if (e.target.checked) setAutoAssignDays(true);
-                }}
-                className="mt-0.5 rounded text-[#004b73] focus:ring-[#004b73] shrink-0"
-              />
+          {/* Nota informativa: siempre se fusionan los días */}
+          <div className="pt-1 border-t border-slate-100">
+            <div className="flex items-start gap-2 text-[11px] text-slate-700 font-sora-medium bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200">
+              <i className="fa-solid fa-circle-info text-emerald-600 mt-0.5 shrink-0"></i>
               <div>
-                <span className="font-sora-bold text-[#004b73] block">
-                  🎯 Mostrar únicamente los días que se están clonando
-                </span>
+                <span className="font-sora-bold text-emerald-700 block">Los días existentes se conservan</span>
                 <span className="text-[10px] text-slate-500 font-poppins-regular block leading-tight mt-0.5">
-                  Reemplaza la agenda del cliente para que solo tenga activos exactamente los días seleccionados arriba (ej. si clonas 3 días, solo se mostrarán esos 3).
+                  Los días clonados se agregan a los que ya tiene el cliente. Ningún día existente se elimina.
                 </span>
               </div>
-            </label>
-
-            {!replaceAssignedDays && (
-              <label className="flex items-start gap-2 text-[11px] text-slate-600 font-poppins-regular bg-blue-50/40 p-2.5 rounded-xl border border-blue-100 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={autoAssignDays}
-                  onChange={(e) => setAutoAssignDays(e.target.checked)}
-                  className="mt-0.5 rounded text-[#004b73] focus:ring-[#004b73] shrink-0"
-                />
-                <span>
-                  Sumar los días importados a los días que ya tenía asignados el cliente
-                </span>
-              </label>
-            )}
+            </div>
           </div>
         </div>
 

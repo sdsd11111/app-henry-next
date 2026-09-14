@@ -244,48 +244,82 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'No client ID provided' }, { status: 400 });
     }
 
-    await conn.beginTransaction();
+    const executeDelete = async () => {
+      await conn.query('SET innodb_lock_wait_timeout = 5');
+      await conn.beginTransaction();
 
-    // 1. Get IDs of day_routines for client
-    const [routines]: any = await conn.query(
-      'SELECT id FROM day_routines WHERE client_id = ?',
-      [clientId]
-    );
-    const routineIds = routines.map((r: any) => r.id);
-
-    if (routineIds.length > 0) {
-      const inRoutines = routineIds.map(() => '?').join(',');
-
-      // 2. Get exercise IDs
-      const [exercises]: any = await conn.query(
-        `SELECT id FROM routine_exercises WHERE routine_id IN (${inRoutines})`,
-        routineIds
+      // 1. Get IDs of day_routines for client
+      const [routines]: any = await conn.query(
+        'SELECT id FROM day_routines WHERE client_id = ?',
+        [clientId]
       );
-      const exIds = exercises.map((e: any) => e.id);
+      const routineIds = routines.map((r: any) => r.id);
 
-      if (exIds.length > 0) {
-        const inEx = exIds.map(() => '?').join(',');
-        await conn.query(`DELETE FROM exercise_sets WHERE routine_exercise_id IN (${inEx})`, exIds);
-        await conn.query(`DELETE FROM routine_exercises WHERE id IN (${inEx})`, exIds);
+      if (routineIds.length > 0) {
+        const inRoutines = routineIds.map(() => '?').join(',');
+
+        // 2. Get exercise IDs
+        const [exercises]: any = await conn.query(
+          `SELECT id FROM routine_exercises WHERE routine_id IN (${inRoutines})`,
+          routineIds
+        );
+        const exIds = exercises.map((e: any) => e.id);
+
+        if (exIds.length > 0) {
+          const inEx = exIds.map(() => '?').join(',');
+          await conn.query(`DELETE FROM exercise_sets WHERE routine_exercise_id IN (${inEx})`, exIds);
+          await conn.query(`DELETE FROM routine_exercises WHERE id IN (${inEx})`, exIds);
+        }
+
+        try {
+          await conn.query(`DELETE FROM cardio_activities WHERE routine_id IN (${inRoutines})`, routineIds);
+        } catch { /* cardio table may not exist */ }
+
+        await conn.query(`DELETE FROM day_routines WHERE id IN (${inRoutines})`, routineIds);
       }
 
-      try {
-        await conn.query(`DELETE FROM cardio_activities WHERE routine_id IN (${inRoutines})`, routineIds);
-      } catch { /* cardio table may not exist */ }
+      // 3. Delete workout_logs
+      await conn.query('DELETE FROM workout_logs WHERE client_id = ?', [clientId]);
 
-      await conn.query(`DELETE FROM day_routines WHERE id IN (${inRoutines})`, routineIds);
+      // 4. Delete client
+      await conn.query('DELETE FROM clients WHERE id = ?', [clientId]);
+
+      await conn.commit();
+    };
+
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await executeDelete();
+        lastError = null;
+        break;
+      } catch (err: any) {
+        await conn.rollback().catch(() => {});
+        lastError = err;
+        const isLockError =
+          err.code === 'ER_LOCK_DEADLOCK' ||
+          err.code === 'ER_LOCK_WAIT_TIMEOUT' ||
+          (err.message && (
+            err.message.includes('Deadlock') ||
+            err.message.includes('Lock wait timeout')
+          ));
+
+        if (isLockError && attempt < 2) {
+          const backoff = (attempt + 1) * 200 + Math.floor(Math.random() * 150);
+          console.warn(`[DELETE client] ${err.code || 'Lock contention'}, reintentando intento ${attempt + 2} tras ${backoff}ms...`);
+          await new Promise(r => setTimeout(r, backoff));
+        } else {
+          break;
+        }
+      }
     }
 
-    // 3. Delete workout_logs
-    await conn.query('DELETE FROM workout_logs WHERE client_id = ?', [clientId]);
+    if (lastError) {
+      throw lastError;
+    }
 
-    // 4. Delete client
-    await conn.query('DELETE FROM clients WHERE id = ?', [clientId]);
-
-    await conn.commit();
     return NextResponse.json({ success: true, message: 'Cliente eliminado permanentemente' });
   } catch (error: any) {
-    await conn.rollback();
     console.error('Error deleting client:', error);
     return NextResponse.json({ error: error.message || 'Error al eliminar cliente' }, { status: 500 });
   } finally {

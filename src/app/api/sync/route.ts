@@ -257,17 +257,35 @@ export async function POST(request: Request) {
           }
         };
 
-        // Try once, retry once on lock timeout
-        try {
-          await persistRoutineIndependent();
-        } catch (retryErr: any) {
-          if (retryErr.message && retryErr.message.includes('Lock wait timeout')) {
-            console.warn('Lock timeout on save_routine, retrying once...');
-            await new Promise(r => setTimeout(r, 200));
+        // Retry loop for deadlock or lock timeout (up to 3 retries)
+        let lastError: any = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
             await persistRoutineIndependent();
-          } else {
-            throw retryErr;
+            lastError = null;
+            break;
+          } catch (retryErr: any) {
+            lastError = retryErr;
+            const isLockError =
+              retryErr.code === 'ER_LOCK_DEADLOCK' ||
+              retryErr.code === 'ER_LOCK_WAIT_TIMEOUT' ||
+              (retryErr.message && (
+                retryErr.message.includes('Deadlock') ||
+                retryErr.message.includes('Lock wait timeout')
+              ));
+
+            if (isLockError && attempt < 2) {
+              const backoff = (attempt + 1) * 150 + Math.floor(Math.random() * 100);
+              console.warn(`[save_routine] ${retryErr.code || 'Lock contention'}, reintentando intento ${attempt + 2} tras ${backoff}ms...`);
+              await new Promise(r => setTimeout(r, backoff));
+            } else {
+              break;
+            }
           }
+        }
+
+        if (lastError) {
+          throw lastError;
         }
 
         return NextResponse.json({ success: true });
@@ -412,87 +430,111 @@ export async function POST(request: Request) {
         const clientId = rawKey.substring(0, lastUnderscore);
         const day = rawKey.substring(lastUnderscore + 1);
 
-        const sc = await getConn();
-        try {
-          const [checkClient]: any = await sc.query('SELECT id FROM clients WHERE id = ?', [clientId]);
-          if (!checkClient || checkClient.length === 0) { sc.release(); continue; }
-
-          const vitals = routineData.vitals || {};
-          const wellness = routineData.wellness || {};
-
-          await sc.beginTransaction();
+        const executeSyncRoutine = async () => {
+          const sc = await getConn();
           try {
-            const [existRoutine]: any = await sc.query(
-              'SELECT id FROM day_routines WHERE client_id = ? AND day_of_week = ?', [clientId, day]
-            );
+            const [checkClient]: any = await sc.query('SELECT id FROM clients WHERE id = ?', [clientId]);
+            if (!checkClient || checkClient.length === 0) { sc.release(); return; }
 
-            let dbRoutineId: number;
-            if (existRoutine && existRoutine.length > 0) {
-              dbRoutineId = existRoutine[0].id;
-              await sc.query(
-                `UPDATE day_routines SET session_name=?, notes=?, is_menstrual_cycle=?, systolic=?, diastolic=?, heart_rate=?, mood=?, sleep=?, nutrition=?, weight=? WHERE id=?`,
-                [routineData.sessionName || '', routineData.notes || '', routineData.isMenstrualCycle ? 1 : 0, vitals.systolic || 0, vitals.diastolic || 0, vitals.heartRate || 0, wellness.mood || null, wellness.sleep || '', wellness.nutrition || '', wellness.weight || 0.0, dbRoutineId]
+            const vitals = routineData.vitals || {};
+            const wellness = routineData.wellness || {};
+
+            await sc.beginTransaction();
+            try {
+              const [existRoutine]: any = await sc.query(
+                'SELECT id FROM day_routines WHERE client_id = ? AND day_of_week = ?', [clientId, day]
               );
-            } else {
-              const [insResult]: any = await sc.query(
-                `INSERT INTO day_routines (client_id, day_of_week, session_name, notes, is_menstrual_cycle, systolic, diastolic, heart_rate, mood, sleep, nutrition, weight) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [clientId, day, routineData.sessionName || '', routineData.notes || '', routineData.isMenstrualCycle ? 1 : 0, vitals.systolic || 0, vitals.diastolic || 0, vitals.heartRate || 0, wellness.mood || null, wellness.sleep || '', wellness.nutrition || '', wellness.weight || 0.0]
-              );
-              dbRoutineId = insResult.insertId;
-            }
 
-            const [oldExIds]: any = await sc.query('SELECT id FROM routine_exercises WHERE routine_id = ?', [dbRoutineId]);
-            const exIds = oldExIds.map((e: any) => e.id);
-            if (exIds.length > 0) {
-              const ph = exIds.map(() => '?').join(',');
-              await sc.query(`DELETE FROM exercise_sets WHERE routine_exercise_id IN (${ph})`, exIds);
-            }
-            await sc.query('DELETE FROM routine_exercises WHERE routine_id = ?', [dbRoutineId]);
-
-            if (routineData.exercises && Array.isArray(routineData.exercises)) {
-              for (let exIndex = 0; exIndex < routineData.exercises.length; exIndex++) {
-                const ex = routineData.exercises[exIndex];
-                const exId = ex.id || `ve_auto_${dbRoutineId}_${exIndex}_${Date.now()}`;
+              let dbRoutineId: number;
+              if (existRoutine && existRoutine.length > 0) {
+                dbRoutineId = existRoutine[0].id;
                 await sc.query(
-                  `INSERT INTO routine_exercises (id, routine_id, order_index, pattern, exercise_name, sets_target, sets_note, reps_target, rest_time, rpe, progression_prompted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                  [exId, dbRoutineId, ex.order || '', ex.pattern || '', ex.name || '', ex.setsTarget || '', ex.setsNote || '', ex.repsTarget || '', ex.rest || '', ex.rpe || 0, ex.progressionPrompted ? 1 : 0]
+                  `UPDATE day_routines SET session_name=?, notes=?, is_menstrual_cycle=?, systolic=?, diastolic=?, heart_rate=?, mood=?, sleep=?, nutrition=?, weight=? WHERE id=?`,
+                  [routineData.sessionName || '', routineData.notes || '', routineData.isMenstrualCycle ? 1 : 0, vitals.systolic || 0, vitals.diastolic || 0, vitals.heartRate || 0, wellness.mood || null, wellness.sleep || '', wellness.nutrition || '', wellness.weight || 0.0, dbRoutineId]
                 );
-                if (ex.sets && Array.isArray(ex.sets)) {
-                  for (let sIndex = 0; sIndex < ex.sets.length; sIndex++) {
-                    const s = ex.sets[sIndex];
-                    await sc.query(
-                      `INSERT INTO exercise_sets (id, routine_exercise_id, set_number, weight, reps, completed) VALUES (?, ?, ?, ?, ?, ?)`,
-                      [`${exId}_s${sIndex}`, exId, s.setNumber || sIndex + 1, s.weight || 0, s.reps || 0, 0]
-                    );
+              } else {
+                const [insResult]: any = await sc.query(
+                  `INSERT INTO day_routines (client_id, day_of_week, session_name, notes, is_menstrual_cycle, systolic, diastolic, heart_rate, mood, sleep, nutrition, weight) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [clientId, day, routineData.sessionName || '', routineData.notes || '', routineData.isMenstrualCycle ? 1 : 0, vitals.systolic || 0, vitals.diastolic || 0, vitals.heartRate || 0, wellness.mood || null, wellness.sleep || '', wellness.nutrition || '', wellness.weight || 0.0]
+                );
+                dbRoutineId = insResult.insertId;
+              }
+
+              const [oldExIds]: any = await sc.query('SELECT id FROM routine_exercises WHERE routine_id = ?', [dbRoutineId]);
+              const exIds = oldExIds.map((e: any) => e.id);
+              if (exIds.length > 0) {
+                const ph = exIds.map(() => '?').join(',');
+                await sc.query(`DELETE FROM exercise_sets WHERE routine_exercise_id IN (${ph})`, exIds);
+              }
+              await sc.query('DELETE FROM routine_exercises WHERE routine_id = ?', [dbRoutineId]);
+
+              if (routineData.exercises && Array.isArray(routineData.exercises)) {
+                for (let exIndex = 0; exIndex < routineData.exercises.length; exIndex++) {
+                  const ex = routineData.exercises[exIndex];
+                  const exId = ex.id || `ve_auto_${dbRoutineId}_${exIndex}_${Date.now()}`;
+                  await sc.query(
+                    `INSERT INTO routine_exercises (id, routine_id, order_index, pattern, exercise_name, sets_target, sets_note, reps_target, rest_time, rpe, progression_prompted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [exId, dbRoutineId, ex.order || '', ex.pattern || '', ex.name || '', ex.setsTarget || '', ex.setsNote || '', ex.repsTarget || '', ex.rest || '', ex.rpe || 0, ex.progressionPrompted ? 1 : 0]
+                  );
+                  if (ex.sets && Array.isArray(ex.sets)) {
+                    for (let sIndex = 0; sIndex < ex.sets.length; sIndex++) {
+                      const s = ex.sets[sIndex];
+                      await sc.query(
+                        `INSERT INTO exercise_sets (id, routine_exercise_id, set_number, weight, reps, completed) VALUES (?, ?, ?, ?, ?, ?)`,
+                        [`${exId}_s${sIndex}`, exId, s.setNumber || sIndex + 1, s.weight || 0, s.reps || 0, 0]
+                      );
+                    }
                   }
                 }
               }
-            }
 
-            try {
-              await sc.query('DELETE FROM cardio_activities WHERE routine_id = ?', [dbRoutineId]);
-              if (routineData.cardio && Array.isArray(routineData.cardio)) {
-                for (let cIndex = 0; cIndex < routineData.cardio.length; cIndex++) {
-                  const card = routineData.cardio[cIndex];
-                  await sc.query(
-                    `INSERT INTO cardio_activities (id, routine_id, type, timing, time, distance, completed) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                    [card.id || `vc_${dbRoutineId}_${cIndex}_${Date.now()}`, dbRoutineId, card.type || '', card.timing || '', card.time || 0, card.distance || 0, card.completed ? 1 : 0]
-                  );
+              try {
+                await sc.query('DELETE FROM cardio_activities WHERE routine_id = ?', [dbRoutineId]);
+                if (routineData.cardio && Array.isArray(routineData.cardio)) {
+                  for (let cIndex = 0; cIndex < routineData.cardio.length; cIndex++) {
+                    const card = routineData.cardio[cIndex];
+                    await sc.query(
+                      `INSERT INTO cardio_activities (id, routine_id, type, timing, time, distance, completed) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                      [card.id || `vc_${dbRoutineId}_${cIndex}_${Date.now()}`, dbRoutineId, card.type || '', card.timing || '', card.time || 0, card.distance || 0, card.completed ? 1 : 0]
+                    );
+                  }
                 }
+              } catch (errCardio) {
+                console.warn('Cardio sync notice:', errCardio);
               }
-            } catch (errCardio) {
-              console.warn('Cardio sync notice:', errCardio);
-            }
 
-            await sc.commit();
-          } catch (err) {
-            await sc.rollback();
-            console.error(`Error syncing routine ${key}:`, err);
+              await sc.commit();
+            } catch (err) {
+              await sc.rollback();
+              throw err;
+            }
+          } finally {
+            sc.release();
           }
-        } catch (e) {
-          console.error(`Error in routine block ${key}:`, e);
-        } finally {
-          sc.release();
+        };
+
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await executeSyncRoutine();
+            break;
+          } catch (err: any) {
+            const isLockError =
+              err.code === 'ER_LOCK_DEADLOCK' ||
+              err.code === 'ER_LOCK_WAIT_TIMEOUT' ||
+              (err.message && (
+                err.message.includes('Deadlock') ||
+                err.message.includes('Lock wait timeout')
+              ));
+
+            if (isLockError && attempt < 2) {
+              const backoff = (attempt + 1) * 150 + Math.floor(Math.random() * 100);
+              console.warn(`[sync_all] ${err.code || 'Lock contention'} en ${key}, reintentando intento ${attempt + 2}...`);
+              await new Promise(r => setTimeout(r, backoff));
+            } else {
+              console.error(`Error syncing routine ${key}:`, err);
+              break;
+            }
+          }
         }
       }
     }

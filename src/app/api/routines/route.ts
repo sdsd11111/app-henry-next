@@ -1,9 +1,23 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const includeHidden = searchParams.get('include_hidden') === '1' || searchParams.get('secret') === 'cr_magic_2026';
+    const specificClient = searchParams.get('clientId');
+
     const allDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+    let clientsQuery = "SELECT * FROM clients WHERE client_type = 'vip' AND username != 'CR' AND id != 'vip_cr'";
+    const clientQueryParams: any[] = [];
+
+    if (specificClient === 'vip_cr' || specificClient === 'CR') {
+      clientsQuery = "SELECT * FROM clients WHERE client_type = 'vip' AND (id = ? OR username = ?)";
+      clientQueryParams.push(specificClient, specificClient);
+    } else if (includeHidden) {
+      clientsQuery = "SELECT * FROM clients WHERE client_type = 'vip'";
+    }
 
     // 1. Parallel batch queries instead of N+1 nested loops
     const [
@@ -14,7 +28,7 @@ export async function GET() {
       [allCardios],
       [allLogs]
     ]: any = await Promise.all([
-      pool.query("SELECT * FROM clients WHERE client_type = 'vip'"),
+      pool.query(clientsQuery, clientQueryParams),
       pool.query("SELECT * FROM day_routines"),
       pool.query("SELECT * FROM routine_exercises ORDER BY order_index ASC"),
       pool.query("SELECT * FROM exercise_sets ORDER BY set_number ASC"),

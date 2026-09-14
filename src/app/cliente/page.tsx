@@ -26,12 +26,17 @@ function ClientePortalContent() {
     async function restoreSession() {
       try {
         const savedClientId = typeof window !== 'undefined' ? localStorage.getItem('hc_vip_client_id') : null;
-        const res = await fetch('/api/routines');
+        const userParam = searchParams.get('user')?.trim().toLowerCase();
+        
+        const routinesUrl = (userParam === 'cr' || savedClientId === 'vip_cr') 
+          ? `/api/routines?clientId=${savedClientId || 'vip_cr'}` 
+          : '/api/routines';
+
+        const res = await fetch(routinesUrl);
         if (res.ok) {
           const data = await res.json();
           const vClients: VipClient[] = data.vipClients || [];
           
-          const userParam = searchParams.get('user')?.trim().toLowerCase();
           let matchedClient: VipClient | undefined;
 
           if (userParam) {

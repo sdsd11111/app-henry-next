@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import VipAdminView from '@/components/VipAdminView';
 import CloneRoutineModal from '@/components/CloneRoutineModal';
+import EditVipClientModal from '@/components/EditVipClientModal';
 import ShareVipModal from '@/components/ShareVipModal';
 import ExerciseHistoryModal from '@/components/ExerciseHistoryModal';
 import { VipClient, DayRoutine } from '@/lib/types';
@@ -308,6 +309,28 @@ export default function CoachPage() {
     );
   };
 
+  const handleUpdateVipClient = async (id: string, updates: Partial<VipClient>) => {
+    try {
+      const res = await fetch('/api/clients', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...updates }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setVipClients((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, ...updates } : c))
+        );
+        setModalEditVip(null);
+      } else {
+        throw new Error(data.error || 'No se pudieron guardar los cambios del cliente.');
+      }
+    } catch (err: any) {
+      console.error('Error updating VIP client:', err);
+      throw err;
+    }
+  };
+
   const handleDeleteVipClient = async (clientId: string) => {
     const client = vipClients.find((c) => c.id === clientId);
     if (!client) return;
@@ -404,6 +427,14 @@ export default function CoachPage() {
       </main>
 
       {/* Modales */}
+      {modalEditVip && (
+        <EditVipClientModal
+          client={modalEditVip}
+          onSave={(updates) => handleUpdateVipClient(modalEditVip.id, updates)}
+          onClose={() => setModalEditVip(null)}
+        />
+      )}
+
       {modalShareVip && (
         <ShareVipModal client={modalShareVip} onClose={() => setModalShareVip(null)} />
       )}

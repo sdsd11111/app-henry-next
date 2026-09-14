@@ -200,7 +200,31 @@ export async function PUT(request: Request) {
     }
 
     values.push(id);
-    await pool.query(`UPDATE clients SET ${setClauses.join(', ')} WHERE id = ?`, values);
+    const sql = `UPDATE clients SET ${setClauses.join(', ')} WHERE id = ?`;
+
+    // Use its own connection with a short lock timeout + 1 retry to avoid
+    // being blocked by long-running sync_all transactions
+    const doUpdate = async () => {
+      const conn = await pool.getConnection();
+      try {
+        await conn.query('SET innodb_lock_wait_timeout = 5');
+        await conn.query(sql, values);
+      } finally {
+        conn.release();
+      }
+    };
+
+    try {
+      await doUpdate();
+    } catch (err: any) {
+      if (err.code === 'ER_LOCK_WAIT_TIMEOUT') {
+        console.warn('Lock timeout updating client, retrying after 300ms...');
+        await new Promise(r => setTimeout(r, 300));
+        await doUpdate();
+      } else {
+        throw err;
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -208,6 +232,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: error.message || 'Error al actualizar cliente' }, { status: 500 });
   }
 }
+
 
 export async function DELETE(request: Request) {
   const conn = await pool.getConnection();

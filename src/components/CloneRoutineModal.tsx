@@ -30,6 +30,7 @@ export default function CloneRoutineModal({
   );
   const [selectedDays, setSelectedDays] = useState<Record<string, boolean>>({});
   const [targetDayMappings, setTargetDayMappings] = useState<Record<string, string>>({});
+  const [replaceAssignedDays, setReplaceAssignedDays] = useState<boolean>(true);
   const [autoAssignDays, setAutoAssignDays] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
@@ -113,9 +114,25 @@ export default function CloneRoutineModal({
     setIsProcessing(true);
     try {
       const newRoutines: Record<string, DayRoutine> = { ...(targetClient.routines || {}) };
-      const newAssignedDays: string[] = [...(targetClient.assignedDays || [])];
-
       let totalImported = 0;
+
+      // Si reemplazamos días asignados, la agenda del cliente destino será EXACTAMENTE los días importados
+      let newAssignedDays: string[];
+      if (replaceAssignedDays) {
+        // Solo los días que se han importado / asignado en el mapeo
+        const assignedTargetDays = Array.from(new Set(daysToImport.map((d) => targetDayMappings[d] || d)));
+        newAssignedDays = assignedTargetDays;
+      } else {
+        newAssignedDays = [...(targetClient.assignedDays || [])];
+        if (autoAssignDays) {
+          for (const sourceDay of daysToImport) {
+            const targetDay = targetDayMappings[sourceDay] || sourceDay;
+            if (!newAssignedDays.includes(targetDay)) {
+              newAssignedDays.push(targetDay);
+            }
+          }
+        }
+      }
 
       for (const sourceDay of daysToImport) {
         const targetDay = targetDayMappings[sourceDay] || sourceDay;
@@ -123,9 +140,6 @@ export default function CloneRoutineModal({
 
         if (sourceRoutine && sourceRoutine.exercises && sourceRoutine.exercises.length > 0) {
           newRoutines[targetDay] = cloneRoutineDeep(sourceRoutine);
-          if (autoAssignDays && !newAssignedDays.includes(targetDay)) {
-            newAssignedDays.push(targetDay);
-          }
           totalImported += sourceRoutine.exercises.length;
         }
       }
@@ -302,19 +316,42 @@ export default function CloneRoutineModal({
             </div>
           </div>
 
-          {/* Opción de Auto-Asignación */}
-          <label className="flex items-start gap-2 text-[11px] text-slate-600 font-poppins-regular bg-blue-50/40 p-2.5 rounded-xl border border-blue-100 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={autoAssignDays}
-              onChange={(e) => setAutoAssignDays(e.target.checked)}
-              className="mt-0.5 rounded text-[#004b73] focus:ring-[#004b73] shrink-0"
-            />
-            <span>
-              Activar automáticamente en la agenda del cliente destino los días importados si no los
-              tenía asignados
-            </span>
-          </label>
+          {/* Opciones de asignación de días en agenda */}
+          <div className="space-y-2 pt-1 border-t border-slate-100">
+            <label className="flex items-start gap-2 text-[11px] text-slate-700 font-sora-medium bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={replaceAssignedDays}
+                onChange={(e) => {
+                  setReplaceAssignedDays(e.target.checked);
+                  if (e.target.checked) setAutoAssignDays(true);
+                }}
+                className="mt-0.5 rounded text-[#004b73] focus:ring-[#004b73] shrink-0"
+              />
+              <div>
+                <span className="font-sora-bold text-[#004b73] block">
+                  🎯 Mostrar únicamente los días que se están clonando
+                </span>
+                <span className="text-[10px] text-slate-500 font-poppins-regular block leading-tight mt-0.5">
+                  Reemplaza la agenda del cliente para que solo tenga activos exactamente los días seleccionados arriba (ej. si clonas 3 días, solo se mostrarán esos 3).
+                </span>
+              </div>
+            </label>
+
+            {!replaceAssignedDays && (
+              <label className="flex items-start gap-2 text-[11px] text-slate-600 font-poppins-regular bg-blue-50/40 p-2.5 rounded-xl border border-blue-100 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoAssignDays}
+                  onChange={(e) => setAutoAssignDays(e.target.checked)}
+                  className="mt-0.5 rounded text-[#004b73] focus:ring-[#004b73] shrink-0"
+                />
+                <span>
+                  Sumar los días importados a los días que ya tenía asignados el cliente
+                </span>
+              </label>
+            )}
+          </div>
         </div>
 
         {/* Footer Fijo */}

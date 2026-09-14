@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import VipAdminView from '@/components/VipAdminView';
 import CloneRoutineModal from '@/components/CloneRoutineModal';
+import EditVipClientModal from '@/components/EditVipClientModal';
 import ShareVipModal from '@/components/ShareVipModal';
 import ExerciseHistoryModal from '@/components/ExerciseHistoryModal';
 import { VipClient, DayRoutine } from '@/lib/types';
@@ -27,6 +28,7 @@ function MagicEditorContent() {
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Modales
+  const [modalEditVip, setModalEditVip] = useState<VipClient | null>(null);
   const [modalShareVip, setModalShareVip] = useState<VipClient | null>(null);
   const [modalCloneRoutine, setModalCloneRoutine] = useState<string | null>(null);
   const [modalHistory, setModalHistory] = useState(false);
@@ -209,6 +211,26 @@ function MagicEditorContent() {
     setCrClient({ ...crClient, routines: { ...crClient.routines, [day]: updatedRoutine } });
   };
 
+  const handleUpdateCrClient = async (id: string, updates: Partial<VipClient>) => {
+    try {
+      const res = await fetch('/api/clients', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...updates }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCrClient((prev) => (prev && prev.id === id ? { ...prev, ...updates } : prev));
+        setModalEditVip(null);
+      } else {
+        throw new Error(data.error || 'No se pudieron guardar los cambios.');
+      }
+    } catch (err: any) {
+      console.error('Error updating CR client:', err);
+      throw err;
+    }
+  };
+
   const handleSyncAll = async () => {
     if (!crClient) return;
     setIsSyncing(true);
@@ -296,7 +318,7 @@ function MagicEditorContent() {
           catalog={CATALOG_FLAT}
           onSelectClient={() => {}}
           onOpenAddVipModal={() => {}}
-          onOpenEditVipModal={() => {}}
+          onOpenEditVipModal={() => setModalEditVip(crClient)}
           onOpenShareVipModal={(id) => {
             if (crClient.id === id) setModalShareVip(crClient);
           }}
@@ -321,6 +343,14 @@ function MagicEditorContent() {
       </main>
 
       {/* Modales */}
+      {modalEditVip && (
+        <EditVipClientModal
+          client={modalEditVip}
+          onSave={(updates) => handleUpdateCrClient(modalEditVip.id, updates)}
+          onClose={() => setModalEditVip(null)}
+        />
+      )}
+
       {modalShareVip && (
         <ShareVipModal client={modalShareVip} onClose={() => setModalShareVip(null)} />
       )}

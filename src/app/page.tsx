@@ -99,9 +99,21 @@ export default function Home() {
           if (typeof window !== 'undefined') {
             const savedVipId = localStorage.getItem('hc_vip_client_id');
             if (savedVipId) {
-              const matched = vClients.find((c) => String(c.id) === String(savedVipId));
-              if (matched) {
-                setLoggedVipClient(matched);
+              if (savedVipId === 'vip_cr') {
+                try {
+                  const crRes = await fetch('/api/routines?clientId=vip_cr');
+                  const crData = await crRes.json();
+                  if (crData.vipClients && crData.vipClients.length > 0) {
+                    setLoggedVipClient(crData.vipClients[0]);
+                  }
+                } catch (eCr) {
+                  console.error('Error restaurando CR en home:', eCr);
+                }
+              } else {
+                const matched = vClients.find((c) => String(c.id) === String(savedVipId));
+                if (matched) {
+                  setLoggedVipClient(matched);
+                }
               }
             }
           }

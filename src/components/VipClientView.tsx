@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { VipClient, DayRoutine, RoutineExercise, ExerciseSet } from '@/lib/types';
+import { sortLogsDescending } from '@/lib/logs';
 import ProgressiveOverloadModal from '@/components/ProgressiveOverloadModal';
 
 interface VipClientViewProps {
@@ -40,6 +41,9 @@ export default function VipClientView({
   const [loginLoading, setLoginLoading] = useState(false);
   const [sessionNotes, setSessionNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  // Mostrar solo las ultimas 8 sesiones hasta que el cliente pulse "Ver mas"
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [showAllWellness, setShowAllWellness] = useState(false);
 
   // Sobrecarga progresiva estado
   const [pendingOverload, setPendingOverload] = useState<{
@@ -171,6 +175,11 @@ export default function VipClientView({
   );
   const progressPercent = totalSetsCount > 0 ? Math.round((completedSetsCount / totalSetsCount) * 100) : 0;
   const wellness = routine.wellness || { mood: null, sleep: null, nutrition: null, weight: 0 };
+  // Historial siempre de la sesion mas reciente a la mas antigua (con su indice original)
+  const LOGS_PREVIEW_COUNT = 8;
+  const logsDesc = sortLogsDescending(client.logs);
+  const visibleHistoryLogs = showAllHistory ? logsDesc : logsDesc.slice(0, LOGS_PREVIEW_COUNT);
+  const visibleWellnessLogs = showAllWellness ? logsDesc : logsDesc.slice(0, LOGS_PREVIEW_COUNT);
 
   const handleToggleSetWithOverloadCheck = (exIndex: number, setIndex: number) => {
     onToggleSetCompleted(exIndex, setIndex);
@@ -794,58 +803,79 @@ export default function VipClientView({
       </div>
 
       {/* Historial Reciente de Entrenamientos */}
-      {client.logs && client.logs.length > 0 && (
+      {logsDesc.length > 0 && (
         <div className="bg-slate-50 border border-slate-300 p-4 space-y-3">
-          <h4 className="text-xs font-sora-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-            <i className="fa-solid fa-clock-rotate-left text-[#004b73]"></i> Tu Historial Reciente de
-            Entrenamientos Registrados
-          </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {client.logs
-              .map((log, origIndex) => ({ log, origIndex }))
-              .reverse()
-              .slice(0, 6)
-              .map(({ log, origIndex }) => (
-                <div
-                  key={origIndex}
-                  className="bg-white p-3 border border-slate-200 text-xs space-y-2 shadow-sm relative hover:border-[#004b73]/40 transition"
-                >
-                  <div className="flex justify-between items-center font-sora-bold gap-2">
-                    <span className="text-[#004b73] truncate">
-                      {log.date} ({log.dayOfWeek})
-                    </span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 font-mono">
-                        {log.setsCount} series
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteLog(origIndex)}
-                        title="Eliminar registro"
-                        className="w-6 h-6 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center transition cursor-pointer"
-                        style={{ color: '#e11d48' }}
-                      >
-                        <i className="fa-solid fa-trash-can text-[11px]"></i>
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-slate-600 italic font-poppins-regular text-[11px] leading-relaxed">
-                    &quot;{log.notes || 'Sesión completada y cargas registradas por el cliente.'}&quot;
-                  </p>
-                </div>
-              ))}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h4 className="text-xs font-sora-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <i className="fa-solid fa-clock-rotate-left text-[#004b73]"></i> Tu Historial Reciente de
+              Entrenamientos Registrados
+            </h4>
+            <span className="text-[10px] text-slate-400 font-poppins-regular shrink-0">
+              Mostrando {visibleHistoryLogs.length} de {logsDesc.length} sesiones
+            </span>
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {visibleHistoryLogs.map(({ log, origIndex }) => (
+              <div
+                key={origIndex}
+                className="bg-white p-3 border border-slate-200 text-xs space-y-2 shadow-sm relative hover:border-[#004b73]/40 transition"
+              >
+                <div className="flex justify-between items-center font-sora-bold gap-2">
+                  <span className="text-[#004b73] truncate">
+                    {log.date} ({log.dayOfWeek})
+                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 font-mono">
+                      {log.setsCount} series
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteLog(origIndex)}
+                      title="Eliminar registro"
+                      className="w-6 h-6 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center transition cursor-pointer"
+                      style={{ color: '#e11d48' }}
+                    >
+                      <i className="fa-solid fa-trash-can text-[11px]"></i>
+                    </button>
+                  </div>
+                </div>
+                <p className="text-slate-600 italic font-poppins-regular text-[11px] leading-relaxed">
+                  &quot;{log.notes || 'Sesión completada y cargas registradas por el cliente.'}&quot;
+                </p>
+              </div>
+            ))}
+          </div>
+          {logsDesc.length > LOGS_PREVIEW_COUNT && (
+            <div className="flex justify-center pt-1">
+              <button
+                type="button"
+                onClick={() => setShowAllHistory((v) => !v)}
+                className="px-4 py-2 text-[11px] font-sora-bold uppercase tracking-wider bg-white border border-[#004b73] text-[#004b73] hover:bg-[#004b73] hover:text-white transition flex items-center gap-2 cursor-pointer shadow-sm"
+              >
+                <i
+                  className={`fa-solid ${showAllHistory ? 'fa-chevron-up' : 'fa-chevron-down'} text-[10px]`}
+                ></i>
+                <span>
+                  {showAllHistory
+                    ? 'Ver menos'
+                    : `Ver más (${logsDesc.length - LOGS_PREVIEW_COUNT})`}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {/* Monitor Semanal de Bienestar */}
-      {client.logs && client.logs.length > 0 && (
+      {logsDesc.length > 0 && (
         <div className="bg-white border border-slate-300 p-4 space-y-3 shadow-sm">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <h4 className="text-xs font-sora-bold text-[#1A3644] uppercase tracking-wider flex items-center gap-1.5">
               <i className="fa-solid fa-heart-pulse text-rose-500"></i> Monitor Semanal de Bienestar
             </h4>
-            <span className="text-[10px] text-slate-400 font-poppins-regular">Últimas 7 sesiones</span>
+            <span className="text-[10px] text-slate-400 font-poppins-regular shrink-0">
+              Últimas {visibleWellnessLogs.length} de {logsDesc.length} sesiones
+            </span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs border-collapse min-w-[600px]">
@@ -860,16 +890,14 @@ export default function VipClientView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {client.logs
-                  .slice(-7)
-                  .reverse()
-                  .map((log, idx) => {
+                {visibleWellnessLogs
+                  .map(({ log, origIndex }, idx) => {
                     const mood = log.readiness?.mood;
                     const sleep = log.readiness?.sleep;
                     const nutrition = log.readiness?.nutrition;
                     const moodNum = typeof mood === 'number' ? mood : parseInt(String(mood), 10);
                     return (
-                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
+                      <tr key={origIndex} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
                         <td className="py-2.5 px-3 text-left font-sora-bold text-[#004b73]">
                           {log.date}<br />
                           <span className="text-[10px] font-poppins-regular text-slate-400">{log.dayOfWeek}</span>
@@ -911,7 +939,7 @@ export default function VipClientView({
                         <td className="py-2.5 px-3 text-center">
                           <button
                             type="button"
-                            onClick={() => onDeleteLog(client.logs.length - 1 - idx)}
+                            onClick={() => onDeleteLog(origIndex)}
                             className="w-6 h-6 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center mx-auto transition cursor-pointer"
                           >
                             <i className="fa-solid fa-trash-can text-[10px]"></i>
@@ -923,6 +951,24 @@ export default function VipClientView({
               </tbody>
             </table>
           </div>
+          {logsDesc.length > LOGS_PREVIEW_COUNT && (
+            <div className="flex justify-center pt-1">
+              <button
+                type="button"
+                onClick={() => setShowAllWellness((v) => !v)}
+                className="px-4 py-2 text-[11px] font-sora-bold uppercase tracking-wider bg-white border border-[#004b73] text-[#004b73] hover:bg-[#004b73] hover:text-white transition flex items-center gap-2 cursor-pointer shadow-sm"
+              >
+                <i
+                  className={`fa-solid ${showAllWellness ? 'fa-chevron-up' : 'fa-chevron-down'} text-[10px]`}
+                ></i>
+                <span>
+                  {showAllWellness
+                    ? 'Ver menos'
+                    : `Ver más (${logsDesc.length - LOGS_PREVIEW_COUNT})`}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 

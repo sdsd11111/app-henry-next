@@ -11,9 +11,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No action specified' }, { status: 400 });
     }
 
-    const pass = process.env.DB_PASS || '';
-    console.log('[DEBUG AUTH] DB_PASS length:', pass.length, 'value:', pass);
-
     // Accept both naming conventions
     if (action === 'login_coach' || action === 'coach_login') {
       const { username, password } = data;
@@ -105,8 +102,9 @@ export async function POST(request: Request) {
             };
           }
 
-          // Load logs
-          const [logs]: any = await pool.query('SELECT * FROM workout_logs WHERE client_id = ? ORDER BY log_date DESC', [client.id]);
+          // Load logs (newest first). NOTE: log_data is returned by mysql2 as an already
+          // parsed object on this server, so it must NOT be passed blindly to JSON.parse.
+          const [logs]: any = await pool.query('SELECT * FROM workout_logs WHERE client_id = ? ORDER BY id DESC', [client.id]);
 
           const clientData = {
             id: client.id, client_type: 'vip', name: client.name, username: client.username,
@@ -114,7 +112,26 @@ export async function POST(request: Request) {
             trainerId: client.trainer_id || '', goal: client.goal || '',
             activeDay: client.active_day || assignedDays[0] || 'Lunes',
             assignedDays, routines: routinesMap,
-            logs: logs.map((l: any) => { let p: any = {}; try { p = JSON.parse(l.log_data || '{}'); } catch { /**/ } return { id: l.id, date: l.log_date, dayOfWeek: l.day_of_week, notes: l.notes, exercisesCount: l.exercises_count, setsCount: l.sets_count, ...p }; }),
+            logs: logs
+              .map((l: any) => {
+                let p: any = null;
+                try {
+                  p = typeof l.log_data === 'string' ? JSON.parse(l.log_data) : l.log_data;
+                } catch {
+                  p = null;
+                }
+                if (!p || typeof p !== 'object') p = {};
+                return {
+                  ...p,
+                  id: p.id !== undefined && p.id !== null ? p.id : l.id,
+                  date: p.date || l.log_date || '',
+                  dayOfWeek: p.dayOfWeek || l.day_of_week || '',
+                  notes: p.notes || l.notes || '',
+                  exercisesCount: p.exercisesCount !== undefined ? p.exercisesCount : (l.exercises_count || 0),
+                  setsCount: p.setsCount !== undefined ? p.setsCount : (l.sets_count || 0),
+                  dbId: l.id,
+                };
+              }),
           };
 
           return NextResponse.json({ success: true, client: clientData, user: clientData, type: 'vip' });

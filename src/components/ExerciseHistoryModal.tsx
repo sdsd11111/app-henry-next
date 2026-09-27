@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { WorkoutLog } from '@/lib/types';
+import { normalizeExerciseName, sortLogsDescending } from '@/lib/logs';
 
 interface ExerciseHistoryModalProps {
   exerciseName: string;
@@ -14,9 +15,9 @@ export default function ExerciseHistoryModal({
   logs,
   onClose,
 }: ExerciseHistoryModalProps) {
-  const searchName = (exerciseName || '').trim().toLowerCase();
+  const searchName = normalizeExerciseName(exerciseName);
 
-  // Extraer el historial de cargas para este ejercicio específico
+  // Extraer el historial de cargas para este ejercicio específico (más reciente primero)
   const historyList: Array<{
     date: string;
     dayOfWeek: string;
@@ -26,10 +27,10 @@ export default function ExerciseHistoryModal({
     wellnessMood: string;
   }> = [];
 
-  (logs || []).forEach((log) => {
+  sortLogsDescending(logs).forEach(({ log }) => {
     if (log.exercises && Array.isArray(log.exercises)) {
       const matchedExercises = log.exercises.filter(
-        (e: any) => (e.name || '').trim().toLowerCase() === searchName
+        (e: any) => normalizeExerciseName(e.name) === searchName
       );
       matchedExercises.forEach((exData: any) => {
         if (exData && exData.sets && exData.sets.length > 0) {
@@ -110,10 +111,20 @@ export default function ExerciseHistoryModal({
               <p className="text-xs text-slate-500 max-w-sm mx-auto font-poppins-regular leading-relaxed">
                 Cuando el cliente complete sus series de <strong>{displayName}</strong> y guarde su sesión, aquí se graficará su historial de récords y volumen total.
               </p>
+              {(logs || []).length > 0 && (
+                <p className="text-[11px] text-slate-400 max-w-sm mx-auto font-poppins-regular leading-relaxed border-t border-slate-100 pt-2">
+                  Hay {(logs || []).length} sesión(es) guardada(s), pero ninguna contiene series de{' '}
+                  <strong>{displayName}</strong>.
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-2.5">
-              {historyList.slice().reverse().map((h, idx) => (
+              <div className="flex items-center justify-between text-[11px] font-sora-bold uppercase tracking-wider text-slate-500 px-1">
+                <span>Más reciente primero</span>
+                <span className="font-mono">{historyList.length} registro(s)</span>
+              </div>
+              {historyList.map((h, idx) => (
                 <div
                   key={idx}
                   className="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs hover:border-[#004b73]/40 transition"

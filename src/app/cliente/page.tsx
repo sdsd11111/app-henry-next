@@ -70,7 +70,11 @@ function ClientePortalContent() {
         const res = await fetch('/api/auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'vip_login', username, password: pass }),
+          body: JSON.stringify({
+            action: 'vip_login',
+            username: username.trim(),
+            password: pass.trim(),
+          }),
         });
         const data = await res.json();
         if (data.success && data.client) {

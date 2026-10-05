@@ -55,19 +55,26 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Missing credentials' }, { status: 400 });
       }
 
+      const cleanUsername = String(username).trim();
+      const cleanPassword = String(password).trim();
+
       const [rows]: any = await pool.query(
-        "SELECT * FROM clients WHERE username = ? AND client_type = 'vip'",
-        [username]
+        "SELECT * FROM clients WHERE (LOWER(TRIM(username)) = LOWER(?) OR LOWER(TRIM(name)) = LOWER(?)) AND client_type = 'vip'",
+        [cleanUsername, cleanUsername]
       );
 
       const client = rows[0];
       if (client) {
         let valid = false;
         if (client.password_hash) {
-          valid = await bcrypt.compare(password, client.password_hash);
+          try {
+            valid = await bcrypt.compare(cleanPassword, client.password_hash);
+          } catch {
+            valid = false;
+          }
         }
         if (!valid && client.password_plain) {
-          valid = client.password_plain === password;
+          valid = client.password_plain.trim() === cleanPassword || client.password_plain === password;
         }
 
         if (valid) {

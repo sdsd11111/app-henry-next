@@ -6,6 +6,7 @@ import Header from '@/components/Header';
 import VipAdminView from '@/components/VipAdminView';
 import CloneRoutineModal from '@/components/CloneRoutineModal';
 import EditVipClientModal from '@/components/EditVipClientModal';
+import AddVipClientModal from '@/components/AddVipClientModal';
 import ShareVipModal from '@/components/ShareVipModal';
 import ExerciseHistoryModal from '@/components/ExerciseHistoryModal';
 import { VipClient, DayRoutine } from '@/lib/types';
@@ -322,6 +323,27 @@ export default function CoachPage() {
     );
   };
 
+  const handleAddVipClient = async (clientData: any) => {
+    try {
+      const res = await fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'vip', ...clientData }),
+      });
+      const data = await res.json();
+      if (data.success && data.client) {
+        setVipClients((prev) => [...prev, data.client]);
+        setSelectedVipClientId(data.client.id);
+        setModalAddVip(false);
+      } else {
+        alert(data.error || 'No se pudo crear el cliente VIP.');
+      }
+    } catch (err) {
+      console.error('Error adding VIP client:', err);
+      alert('Error de conexión al crear el cliente VIP.');
+    }
+  };
+
   const handleUpdateVipClient = async (id: string, updates: Partial<VipClient>) => {
     try {
       const res = await fetch('/api/clients', {
@@ -440,6 +462,9 @@ export default function CoachPage() {
       </main>
 
       {/* Modales */}
+      {modalAddVip && (
+        <AddVipClientModal onSave={handleAddVipClient} onClose={() => setModalAddVip(false)} />
+      )}
       {modalEditVip && (
         <EditVipClientModal
           client={modalEditVip}

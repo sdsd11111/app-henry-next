@@ -368,12 +368,26 @@ export async function POST(request: Request) {
     // 1. Sync Floor Clients — one short transaction per client
     if (payload.clients && Array.isArray(payload.clients)) {
       for (const c of payload.clients) {
-        const assigned = JSON.stringify(c.assignedDays || c.assigned_days || []);
+        if (!c || !c.id) continue;
         const sc = await getConn();
         try {
+          const [existing]: any = await sc.query('SELECT * FROM clients WHERE id = ?', [c.id]);
+          if (!existing || existing.length === 0) { sc.release(); continue; }
+          const curr = existing[0];
+
+          const clientName = c.name !== undefined ? c.name : curr.name;
+          const trainerId = c.trainerId !== undefined ? c.trainerId : (c.trainer !== undefined ? c.trainer : curr.trainer_id);
+          const timeSlot = c.timeSlot !== undefined ? c.timeSlot : (c.time_slot !== undefined ? c.time_slot : curr.time_slot);
+          const goal = c.goal !== undefined ? c.goal : curr.goal;
+          const activeDay = c.activeDay !== undefined ? c.activeDay : (c.active_day !== undefined ? c.active_day : curr.active_day);
+          const isActiveFloor = c.isActiveFloor !== undefined ? (c.isActiveFloor ? 1 : 0) : curr.is_active_floor;
+          const assigned = (c.assignedDays !== undefined || c.assigned_days !== undefined)
+            ? JSON.stringify(c.assignedDays || c.assigned_days || [])
+            : curr.assigned_days;
+
           await sc.query(
             `UPDATE clients SET name=?, trainer_id=?, time_slot=?, goal=?, active_day=?, is_active_floor=?, assigned_days=? WHERE id=?`,
-            [c.name, c.trainerId || c.trainer || 'henry', c.timeSlot || c.time_slot || '', c.goal || '', c.activeDay || c.active_day || '', c.isActiveFloor ? 1 : 0, assigned, c.id]
+            [clientName, trainerId || 'henry', timeSlot || '', goal || '', activeDay || '', isActiveFloor, assigned, c.id]
           );
         } catch (e) {
           console.error('Error syncing floor client:', e);
@@ -386,19 +400,29 @@ export async function POST(request: Request) {
     // 2. Sync VIP Clients — one short transaction per client
     if (payload.vip_clients && Array.isArray(payload.vip_clients)) {
       for (const v of payload.vip_clients) {
+        if (!v || !v.id) continue;
         const sc = await getConn();
         try {
-          const [existing]: any = await sc.query('SELECT id FROM clients WHERE id = ?', [v.id]);
+          const [existing]: any = await sc.query('SELECT * FROM clients WHERE id = ?', [v.id]);
           if (!existing || existing.length === 0) { sc.release(); continue; }
+          const curr = existing[0];
 
-          const assigned = JSON.stringify(v.assignedDays || v.assigned_days || []);
-          const passPlain = v.password || v.password_plain || '';
-          const hash = passPlain ? await bcrypt.hash(passPlain, 10) : '';
-          const trainerId = v.trainerId || v.trainer || 'henry';
+          const clientName = v.name !== undefined ? v.name : curr.name;
+          const username = v.username !== undefined ? v.username : curr.username;
+          const passPlain = v.password !== undefined ? v.password : (v.password_plain !== undefined ? v.password_plain : curr.password_plain);
+          const hash = (v.password || v.password_plain) ? await bcrypt.hash(passPlain, 10) : curr.password_hash;
+          const trainerId = v.trainerId !== undefined ? v.trainerId : (v.trainer !== undefined ? v.trainer : curr.trainer_id);
+          const gender = v.gender !== undefined ? v.gender : curr.gender;
+          const goal = v.goal !== undefined ? v.goal : curr.goal;
+          const activeDay = v.activeDay !== undefined ? v.activeDay : (v.active_day !== undefined ? v.active_day : curr.active_day);
+          const assigned = (v.assignedDays !== undefined || v.assigned_days !== undefined)
+            ? JSON.stringify(v.assignedDays || v.assigned_days || [])
+            : curr.assigned_days;
+          const lastDateRendered = v.lastDateRendered !== undefined ? v.lastDateRendered : (v.last_date_rendered !== undefined ? v.last_date_rendered : curr.last_date_rendered);
 
           await sc.query(
             `UPDATE clients SET name=?, username=?, password_hash=?, password_plain=?, trainer_id=?, gender=?, goal=?, active_day=?, assigned_days=?, last_date_rendered=? WHERE id=?`,
-            [v.name, v.username || '', hash, passPlain, trainerId, v.gender || '', v.goal || '', v.activeDay || '', assigned, v.lastDateRendered || '', v.id]
+            [clientName, username || '', hash, passPlain, trainerId || 'henry', gender || '', goal || '', activeDay || '', assigned, lastDateRendered || '', v.id]
           );
 
           // Sync Workout Logs
